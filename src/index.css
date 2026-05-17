@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-brand-lime: #00FF66;
+  --color-brand-pink: #FFE500;
+  --color-brand-cyan: #0055FF;
+  --color-brand-black: #1A1A1A;
+  --color-brand-white: #ffffff;
+  --color-brand-bg: #F4F1ED;
+  --color-brand-gray: #EAE7E1;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-neo: 12px 12px 0px 0px rgba(0,0,0,1);
+  --shadow-neo-sm: 4px 4px 0px 0px rgba(0,0,0,1);
+}
+
+@layer base {
+  body {
+    @apply font-sans bg-brand-bg text-brand-black;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer utilities {
+  .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+  @keyframes fadeIn { 
+    from { opacity: 0; transform: translateY(8px); } 
+    to { opacity: 1; transform: translateY(0); } 
+  }
+
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+@layer components {
+  .table-container { 
+    width: 100%; 
+    overflow-x: auto; 
+    -webkit-overflow-scrolling: touch; 
+  }
+
+  .neo-card {
+    @apply bg-white border-4 border-brand-black shadow-neo;
+  }
+
+  .neo-btn-primary {
+    @apply bg-brand-black text-white border-4 border-brand-black font-black uppercase tracking-widest outline-none disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .neo-btn-secondary {
+    @apply bg-white text-brand-black border-4 border-brand-black font-black uppercase tracking-widest outline-none hover:bg-brand-gray disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .neo-input {
+    @apply bg-white border-4 border-brand-black text-brand-black font-bold outline-none focus:bg-brand-gray;
+  }
+}
