@@ -6,10 +6,11 @@ import { db, appId } from '../lib/firebase';
 import { collection, onSnapshot, updateDoc, deleteDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { filterItemsByDate, formatDate, hashPin, HOUSES, SUB_OPTIONS } from '../lib/utils';
 import clsx from 'clsx';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Legend, AreaChart, Area } from 'recharts';
+import { startOfDay, startOfWeek, startOfMonth, format, eachDayOfInterval, eachHourOfInterval, isWithinInterval, subDays, subWeeks } from 'date-fns';
 
 export default function Admin() {
-    const { profile, setView, setProfile, notify } = useApp();
+    const { profile, setView, setProfile, notify, isDarkMode } = useApp();
     const [admTab, setAdmTab] = useState<'analytics' | 'directory' | 'ledger' | 'notices' | 'tickets' | 'polls' | 'dues'>('analytics');
     const [admFilter, setAdmFilter] = useState('all');
     
@@ -19,6 +20,7 @@ export default function Admin() {
     const [madrasaStudentsData, setMadrasaStudentsData] = useState<any[]>([]);
     const [ticketsData, setTicketsData] = useState<any[]>([]);
     const [pollsData, setPollsData] = useState<any[]>([]);
+    const [sosData, setSosData] = useState<any[]>([]);
     
     // UI state
     const [directoryFilter, setDirectoryFilter] = useState<'all'|'resident'|'staff'|'admin'|'madrasa'>('all');
@@ -30,6 +32,7 @@ export default function Admin() {
     const [pollTitle, setPollTitle] = useState('');
     const [pollOptA, setPollOptA] = useState('');
     const [pollOptB, setPollOptB] = useState('');
+    const [logsData, setLogsData] = useState<any[]>([]);
 
     const [showAddAdmin, setShowAddAdmin] = useState(false);
     const [viewStaff, setViewStaff] = useState<any>(null);
@@ -54,6 +57,14 @@ export default function Admin() {
             setPollsData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         });
 
+        const logsUnsub = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), snap => {
+            setLogsData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+
+        const sosUnsub = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'sos'), snap => {
+            setSosData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+
         return () => {
             usersUnsub();
             codesUnsub();
@@ -61,6 +72,8 @@ export default function Admin() {
             msUnsub();
             ticketsUnsub();
             pollsUnsub();
+            logsUnsub();
+            sosUnsub();
         };
     }, []);
 
@@ -170,38 +183,138 @@ export default function Admin() {
         return Object.keys(statusCounts).map(k => ({ name: k, count: statusCounts[k] }));
     };
 
+    const totalEntries = codesData.filter(x => x.status === 'used').length;
+    const totalStaff = usersData.filter(x => x.role === 'staff' && x.status === 'approved').length;
+    const totalHouses = usersData.filter(x => x.role === 'resident').length;
+
     const typeChartData = prepareTypeChart();
     const statusChartData = prepareStatusChart();
-    const colors = ['#bef264', '#f9a8d4', '#67e8f9', '#fcd34d'];
+
+    const getTimelineData = () => {
+        const now = new Date();
+        let interval: { start: Date; end: Date };
+        let formatStr = 'HH:00';
+        let steps: Date[] = [];
+
+        if (admFilter === 'today') {
+            interval = { start: startOfDay(now), end: now };
+            steps = eachHourOfInterval(interval);
+            formatStr = 'HH:00';
+        } else if (admFilter === 'week') {
+            interval = { start: startOfWeek(now), end: now };
+            steps = eachDayOfInterval(interval);
+            formatStr = 'EEE';
+        } else {
+            interval = { start: subDays(now, 30), end: now };
+            steps = eachDayOfInterval(interval);
+            formatStr = 'dd MMM';
+        }
+
+        return steps.map(step => {
+            const nextStep = new Date(step);
+            if (admFilter === 'today') nextStep.setHours(step.getHours() + 1);
+            else nextStep.setDate(step.getDate() + 1);
+
+            const range = { start: step, end: nextStep };
+
+            const logins = logsData.filter(l => {
+                const d = l.timestamp?.toDate ? l.timestamp.toDate() : new Date(l.timestamp);
+                return l.type === 'login' && isWithinInterval(d, range);
+            }).length;
+
+            const activeUsers = new Set(logsData.filter(l => {
+                const d = l.timestamp?.toDate ? l.timestamp.toDate() : new Date(l.timestamp);
+                return l.type === 'login' && isWithinInterval(d, range);
+            }).map(l => l.identifier)).size;
+
+            const codes = codesData.filter(c => {
+                const d = c.createdAt?.toDate ? c.createdAt.toDate() : new Date(c.createdAt);
+                return isWithinInterval(d, range);
+            }).length;
+
+            const entries = codesData.filter(c => {
+                const d = c.usedAt?.toDate ? c.usedAt.toDate() : (c.usedAt ? new Date(c.usedAt) : null);
+                return d && isWithinInterval(d, range);
+            }).length;
+
+            const sos = sosData.filter(s => {
+                const d = s.createdAt?.toDate ? s.createdAt.toDate() : new Date(s.createdAt);
+                return isWithinInterval(d, range);
+            }).length;
+
+            return {
+                time: format(step, formatStr),
+                logins,
+                activeUsers,
+                codes,
+                entries,
+                sos
+            };
+        });
+    };
+
+    const timelineData = getTimelineData();
 
     return (
-        <div className="max-w-4xl mx-auto min-h-screen pb-24 animate-fade-in relative bg-stone-50/50">
-            <header className="flex flex-col gap-2 mb-6">
-                <div className="flex justify-between items-center border-b border-gray-200 pb-3 p-4 sticky top-0 bg-white/90 backdrop-blur z-20">
+        <div className="max-w-4xl mx-auto min-h-screen pb-24 animate-fade-in relative bg-stone-50/50 dark:bg-stone-950/50 transition-colors">
+            <header className="flex flex-col gap-2 mb-6 text-brand-black dark:text-gray-100">
+                <div className="flex justify-between items-center border-b border-gray-200 dark:border-stone-800 pb-3 p-4 sticky top-0 bg-white dark:bg-stone-900/95 backdrop-blur z-20 transition-colors shadow-sm">
                     <div>
-                        <h1 className="text-xl font-semibold text-brand-black tracking-tight">Estate Mgmt</h1>
-                        <p className="text-[10px] text-emerald-800 font-medium tracking-widest uppercase mt-0.5">Oversight Console</p>
+                        <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">Estate Mgmt</h1>
+                        <p className="text-[10px] text-emerald-800 dark:text-emerald-400 font-bold tracking-widest uppercase mt-0.5">Oversight Console</p>
                     </div>
-                    <div className="flex gap-2 items-center">
+                    <div className="flex gap-3 items-center">
                         <ThemeToggle />
-                        <button onClick={() => { setProfile(null); setView('landing'); }} className="p-2.5 bg-gray-50 text-gray-600 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors">
+                        <button onClick={() => { setProfile(null); setView('landing'); }} className="p-2.5 bg-gray-50 dark:bg-stone-800 text-gray-600 dark:text-stone-400 rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 transition-colors">
                             <LogOut className="w-5 h-5"/>
                         </button>
                     </div>
                 </div>
-                <div className="bg-white px-3 py-1 flex items-center gap-2 overflow-x-auto no-scrollbar shadow-sm sticky top-[69px] z-10 border-b border-gray-100">
-                    {admTab !== 'directory' && (
-                        <select value={admFilter} onChange={e=>setAdmFilter(e.target.value)} className="bg-stone-50 text-stone-700 text-[11px] font-semibold py-1.5 px-3 rounded-full border border-stone-200 outline-none mr-2 focus:ring-2 focus:ring-emerald-500/20">
-                            <option value="all">All</option><option value="today">Today</option><option value="week">Week</option><option value="month">Month</option>
-                        </select>
-                    )}
-                    <button onClick={()=>setAdmTab('analytics')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", admTab==='analytics' ? 'bg-emerald-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200')}>Analytics</button>
-                    <button onClick={()=>setAdmTab('directory')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", admTab==='directory' ? 'bg-emerald-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200')}>Directory</button>
-                    <button onClick={()=>setAdmTab('ledger')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", admTab==='ledger' ? 'bg-emerald-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200')}>Ledger</button>
-                    <button onClick={()=>setAdmTab('notices')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", admTab==='notices' ? 'bg-emerald-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200')}>Notices</button>
-                    <button onClick={()=>setAdmTab('tickets')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", admTab==='tickets' ? 'bg-emerald-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200')}>Fix-It</button>
-                    <button onClick={()=>setAdmTab('polls')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", admTab==='polls' ? 'bg-emerald-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200')}>Polls</button>
-                    <button onClick={()=>setAdmTab('dues')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", admTab==='dues' ? 'bg-emerald-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200')}>Dues</button>
+                
+                {/* Redesigned Navigation: Filter + Grid */}
+                <div className="px-4 py-4 bg-white dark:bg-stone-900 border-b border-gray-100 dark:border-stone-800 shadow-sm transition-colors sticky top-[69px] z-10">
+                    <div className="flex items-center gap-3 mb-4 overflow-hidden">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-stone-500">Period:</span>
+                        <div className="flex gap-1 overflow-x-auto no-scrollbar">
+                            {['today', 'week', 'month', 'all'].map(f => (
+                                <button 
+                                    key={f}
+                                    onClick={() => setAdmFilter(f)}
+                                    className={clsx(
+                                        "px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all whitespace-nowrap",
+                                        admFilter === f ? "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800" : "bg-gray-50 dark:bg-stone-800 text-gray-500 dark:text-stone-500 border border-transparent hover:bg-gray-100 dark:hover:bg-stone-700"
+                                    )}
+                                >
+                                    {f}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-4 gap-2">
+                        {[
+                            { id: 'analytics', label: 'Stats' },
+                            { id: 'directory', label: 'Users' },
+                            { id: 'ledger', label: 'Ledger' },
+                            { id: 'notices', label: 'News' },
+                            { id: 'tickets', label: 'Fix-It' },
+                            { id: 'polls', label: 'Polls' },
+                            { id: 'dues', label: 'Dues' }
+                        ].map(tab => (
+                            <button 
+                                key={tab.id}
+                                onClick={() => setAdmTab(tab.id as any)}
+                                className={clsx(
+                                    "px-2 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-tighter text-center transition-all border",
+                                    admTab === tab.id 
+                                        ? "bg-emerald-900 dark:bg-emerald-600 text-white border-emerald-900 dark:border-emerald-500 shadow-md scale-[1.02]" 
+                                        : "bg-white dark:bg-stone-800 text-gray-600 dark:text-gray-400 border-gray-100 dark:border-stone-700 hover:bg-gray-50 dark:hover:bg-stone-700"
+                                )}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </header>
             
@@ -209,14 +322,14 @@ export default function Admin() {
                 {admTab === 'dues' && (
                     <div className="space-y-4 animate-fade-in">
                         <div className="flex justify-between items-center px-1 mb-2">
-                            <h2 className="text-sm text-brand-black font-semibold uppercase tracking-wide">Estate Dues Ledger (Current Year)</h2>
+                            <h2 className="text-sm text-gray-900 dark:text-gray-100 font-bold uppercase tracking-wide">Estate Dues Ledger</h2>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 gap-3">
                             {usersData.filter(x => x.role === 'resident').map(res => (
-                                <div key={res.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex justify-between items-center transition-all hover:shadow-md">
+                                <div key={res.id} className="bg-white dark:bg-stone-900 rounded-2xl border border-gray-200 dark:border-stone-800 p-4 shadow-sm flex justify-between items-center transition-all hover:shadow-md">
                                     <div>
-                                        <h3 className="font-semibold text-brand-black text-sm">{res.identifier}</h3>
-                                        <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">{res.firstName} {res.lastName}</p>
+                                        <h3 className="font-bold text-gray-900 dark:text-gray-100 text-sm italic">{res.identifier}</h3>
+                                        <p className="text-[10px] font-bold text-gray-400 dark:text-stone-500 uppercase tracking-widest">{res.firstName} {res.lastName}</p>
                                     </div>
                                     <button 
                                         onClick={async () => {
@@ -224,7 +337,12 @@ export default function Admin() {
                                             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', res.id), { duesStatus: newStat });
                                             notify(`Updated ${res.identifier} to ${newStat.toUpperCase()}`);
                                         }}
-                                        className={clsx("px-4 py-2 rounded-lg font-semibold uppercase text-[10px] transition-colors shadow-sm", res.duesStatus === 'paid' ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100" : "bg-red-50 text-red-600 border border-red-200 hover:bg-red-100")}
+                                        className={clsx(
+                                            "px-4 py-2 rounded-xl font-black uppercase text-[10px] transition-all shadow-sm border", 
+                                            res.duesStatus === 'paid' 
+                                                ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100" 
+                                                : "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900 hover:bg-red-100"
+                                        )}
                                     >
                                         {res.duesStatus === 'paid' ? 'Paid' : 'Unpaid'}
                                     </button>
@@ -351,51 +469,151 @@ export default function Admin() {
                     </div>
                 )}
                 {admTab === 'analytics' && (
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-white p-5 rounded-xl border border-gray-200 text-center shadow-sm flex flex-col items-center justify-center">
-                                <p className="text-4xl font-semibold text-brand-black mb-1">{usersData.filter(x=>x.role==='resident').length}</p>
-                                <p className="text-[10px] font-medium text-emerald-800 uppercase tracking-widest bg-emerald-50 px-2 py-1 rounded-full">Houses</p>
+                    <div className="space-y-6 animate-fade-in pb-12">
+                        {/* Summary Metrics */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {[
+                                { label: 'Houses', value: usersData.filter(x=>x.role==='resident').length, color: 'text-gray-900', bg: 'bg-white' },
+                                { label: 'Inside', value: filteredCodes.filter(x=>x.status==='used').length, color: 'text-emerald-700', bg: 'bg-emerald-50/30' },
+                                { label: 'Staff', value: usersData.filter(x=>x.role==='staff' && x.status === 'approved').length, color: 'text-blue-700', bg: 'bg-blue-50/30' },
+                                { label: 'Logins', value: logsData.filter(l => l.type === 'login').length, color: 'text-amber-700', bg: 'bg-amber-50/30' }
+                            ].map((stat, idx) => (
+                                <div key={idx} className={clsx("p-4 rounded-3xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-center justify-center transition-all", stat.bg, "dark:bg-stone-900")}>
+                                    <p className={clsx("text-2xl font-black italic", stat.color, "dark:text-gray-100")}>{stat.value}</p>
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">{stat.label}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Access Timeline */}
+                            <div className="bg-white dark:bg-stone-900 p-5 rounded-[2rem] border border-gray-100 dark:border-stone-800 shadow-sm transition-colors">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div>
+                                        <h3 className="text-[11px] font-black uppercase text-gray-900 dark:text-gray-100 tracking-widest">Active Access</h3>
+                                        <p className="text-[9px] text-gray-400 font-bold">Engagement Trends</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div><span className="text-[8px] font-black uppercase text-gray-400">Codes</span></div>
+                                        <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div><span className="text-[8px] font-black uppercase text-gray-400">Active</span></div>
+                                    </div>
+                                </div>
+                                <div className="h-[220px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <AreaChart data={timelineData}>
+                                            <defs>
+                                                <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                                </linearGradient>
+                                                <linearGradient id="colorCodes" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                                </linearGradient>
+                                            </defs>
+                                            <XAxis dataKey="time" tick={{fill:'#94a3b8', fontSize: 9}} axisLine={false} tickLine={false} />
+                                            <YAxis hide />
+                                            <Tooltip 
+                                                contentStyle={{backgroundColor: isDarkMode ? '#1c1917' : '#fff', border: 'none', borderRadius: '16px', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}}
+                                                itemStyle={{fontSize: '10px', fontWeight: '900', textTransform: 'uppercase'}}
+                                            />
+                                            <Area type="monotone" dataKey="activeUsers" name="Users" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorUsers)" />
+                                            <Area type="monotone" dataKey="codes" name="Codes" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorCodes)" />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                </div>
                             </div>
-                            <div className="bg-white p-5 rounded-xl border border-gray-200 text-center shadow-sm flex flex-col items-center justify-center">
-                                <p className="text-4xl font-semibold text-brand-black mb-1">{filteredCodes.filter(x=>x.status==='used').length}</p>
-                                <p className="text-[10px] font-medium text-teal-800 uppercase tracking-widest bg-teal-50 px-2 py-1 rounded-full">Inside Now</p>
+
+                            {/* SOS Alerting */}
+                            <div className="bg-white dark:bg-stone-900 p-5 rounded-[2rem] border border-gray-100 dark:border-stone-800 shadow-sm transition-colors">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div>
+                                        <h3 className="text-[11px] font-black uppercase text-rose-600 tracking-widest">SOS Alerts</h3>
+                                        <p className="text-[9px] text-gray-400 font-bold">Emergency Trends</p>
+                                    </div>
+                                    <div className="bg-rose-50 dark:bg-rose-900/20 px-2 py-0.5 rounded-full">
+                                        <span className="text-[8px] font-black text-rose-600 uppercase">{sosData.length} PK</span>
+                                    </div>
+                                </div>
+                                <div className="h-[220px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={timelineData}>
+                                            <XAxis dataKey="time" hide />
+                                            <YAxis hide />
+                                            <Tooltip 
+                                                contentStyle={{backgroundColor: isDarkMode ? '#1c1917' : '#fff', border: 'none', borderRadius: '16px'}}
+                                                itemStyle={{fontSize: '10px', fontWeight: '900'}}
+                                            />
+                                            <Line type="stepAfter" dataKey="sos" name="SOS" stroke="#f43f5e" strokeWidth={4} dot={{ r: 3, fill: '#f43f5e', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-white p-5 rounded-xl border border-gray-200 text-center shadow-sm flex flex-col items-center justify-center">
-                                <p className="text-4xl font-semibold text-brand-black mb-1">{usersData.filter(x=>x.role==='staff' && x.status === 'approved').length}</p>
-                                <p className="text-[10px] font-medium text-blue-800 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded-full">Active Staff</p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Traffic Pie */}
+                            <div className="bg-white dark:bg-stone-900 p-5 rounded-[2rem] border border-gray-100 dark:border-stone-800 shadow-sm transition-colors">
+                                <h3 className="text-[11px] font-black uppercase text-gray-900 dark:text-gray-100 mb-4 tracking-widest">Category Mix</h3>
+                                <div className="h-[200px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie data={typeChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={8}>
+                                                {typeChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={['#10b981', '#14b8a6', '#3b82f6', '#8b5cf6', '#f43f5e'][index % 5]} stroke="none" />)}
+                                            </Pie>
+                                            <Tooltip contentStyle={{backgroundColor: isDarkMode ? '#1c1917' : '#fff', border: 'none', borderRadius: '16px'}} />
+                                            <Legend verticalAlign="bottom" height={30} iconType="circle" formatter={(value) => <span className="text-[8px] font-black uppercase text-gray-400">{value}</span>}/>
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
                             </div>
-                            <div className="bg-white p-5 rounded-xl border border-gray-200 text-center shadow-sm flex flex-col items-center justify-center">
-                                <p className="text-4xl font-semibold text-brand-black mb-1">{usersData.filter(x=>x.role==='staff' && (x.status === 'pending_employee_completion' || x.status === 'pending_resident_approval')).length}</p>
-                                <p className="text-[10px] font-medium text-amber-800 uppercase tracking-widest bg-amber-50 px-2 py-1 rounded-full">Pending Staff</p>
+                            
+                            {/* Movement Bar */}
+                            <div className="bg-white dark:bg-stone-900 p-5 rounded-[2rem] border border-gray-100 dark:border-stone-800 shadow-sm transition-colors">
+                                <h3 className="text-[11px] font-black uppercase text-gray-900 dark:text-gray-100 mb-4 tracking-widest">Velocity</h3>
+                                <div className="h-[200px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={statusChartData}>
+                                            <XAxis dataKey="name" tick={{fill:'#94a3b8', fontSize: 8}} axisLine={false} tickLine={false} />
+                                            <YAxis hide />
+                                            <Tooltip cursor={false} contentStyle={{backgroundColor: isDarkMode ? '#1c1917' : '#fff', border: 'none', borderRadius: '16px'}} />
+                                            <Bar dataKey="count" fill="#10b981" radius={[12, 12, 12, 12]} barSize={24} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
                             </div>
                         </div>
-                        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm mt-6">
-                            <h3 className="text-sm font-semibold uppercase text-brand-black mb-6 border-b border-gray-100 pb-2 tracking-wide">Traffic Distribution</h3>
-                            <div className="h-[250px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie data={typeChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={90} label>
-                                            {typeChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={['#10b981', '#14b8a6', '#64748b', '#f43f5e'][index % 4]} stroke="none" />)}
-                                        </Pie>
-                                        <Tooltip contentStyle={{backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
-                                    </PieChart>
-                                </ResponsiveContainer>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Recent Logs List - Simplified */}
+                            <div className="bg-white dark:bg-stone-900 p-5 rounded-[2rem] border border-gray-100 dark:border-stone-800 shadow-sm transition-colors">
+                                <h3 className="text-[11px] font-black uppercase text-gray-900 dark:text-gray-100 mb-4 tracking-widest">Entry Chain</h3>
+                                <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 no-scrollbar">
+                                    {codesData.filter(c => c.status === 'used').sort((a,b) => (b.usedAt?.seconds || 0) - (a.usedAt?.seconds || 0)).slice(0, 10).map(c => (
+                                        <div key={c.id} className="flex justify-between items-center bg-stone-50/50 dark:bg-stone-900/50 p-2.5 rounded-2xl border border-stone-100 dark:border-stone-800">
+                                            <div className="flex-1 min-w-0 mr-3">
+                                                <p className="text-[10px] font-black text-stone-800 dark:text-gray-100 uppercase truncate italic">{c.targetName}</p>
+                                                <p className="text-[8px] text-stone-400 font-bold uppercase tracking-tighter">{formatDate(c.usedAt)} • {c.houseId}</p>
+                                            </div>
+                                            <span className="text-[8px] font-black bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded-xl uppercase border border-emerald-100 dark:border-emerald-800">IN</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                            <h3 className="text-sm font-semibold uppercase text-brand-black mb-6 border-b border-gray-100 pb-2 tracking-wide">Status Ledger</h3>
-                            <div className="h-[250px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={statusChartData}>
-                                        <XAxis dataKey="name" tick={{fill:'#64748b', fontSize: 12}} axisLine={{stroke:'#e5e7eb'}} tickLine={false} />
-                                        <YAxis tick={{fill:'#64748b', fontSize: 12}} axisLine={{stroke:'#e5e7eb'}} tickLine={false} />
-                                        <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
-                                        <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} />
-                                    </BarChart>
-                                </ResponsiveContainer>
+                            
+                            <div className="bg-white dark:bg-stone-900 p-5 rounded-[2rem] border border-gray-100 dark:border-stone-800 shadow-sm transition-colors">
+                                <h3 className="text-[11px] font-black uppercase text-gray-900 dark:text-gray-100 mb-4 tracking-widest">Login Chain</h3>
+                                <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2 no-scrollbar">
+                                    {logsData.filter(l => l.type === 'login').sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)).slice(0, 10).map(l => (
+                                        <div key={l.id} className="flex justify-between items-center bg-stone-50/50 dark:bg-stone-900/50 p-2.5 rounded-2xl border border-stone-100 dark:border-stone-800">
+                                            <div className="flex-1 min-w-0 mr-3">
+                                                <p className="text-[10px] font-black text-stone-800 dark:text-gray-100 uppercase truncate italic">{l.identifier}</p>
+                                                <p className="text-[8px] text-stone-400 font-bold uppercase tracking-tighter">{formatDate(l.timestamp)} • {l.role}</p>
+                                            </div>
+                                            <span className="text-[8px] font-black bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 px-2.5 py-1 rounded-xl uppercase border border-sky-100 dark:border-sky-800">ON</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>

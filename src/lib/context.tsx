@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, initAuthFlow } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import SplashScreen from '../components/SplashScreen';
 
 type View = 'landing' | 'login' | 'register' | 'resident' | 'security' | 'admin' | 'staff_register' | 'staff' | 'madrasa_admin';
 
@@ -23,6 +24,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const [profile, setProfile] = useState<any>(null);
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
     const [loading, setLoading] = useState(true);
+    const [showSplash, setShowSplash] = useState(true);
     const [isDarkMode, setIsDarkMode] = useState(() => {
         const saved = localStorage.getItem('isDarkMode');
         return saved ? JSON.parse(saved) : false;
@@ -46,6 +48,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }
         });
         return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const inviteCode = urlParams.get('inviteCode');
+        const viewOverride = urlParams.get('view');
+        
+        if (viewOverride === 'staff_onboarding' && inviteCode) {
+            setView('staff_register', { inviteCode });
+        }
     }, []);
 
     const setView = (v: View, params: any = {}) => {
@@ -72,7 +84,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     return (
         <AppContext.Provider value={{ view, setView, viewParams, profile, setProfile, notify, isDarkMode, toggleDarkMode }}>
-            {children}
+            {showSplash ? (
+                <SplashScreen onFinish={() => {
+                    localStorage.setItem('hasSeenSplash', 'true');
+                    setShowSplash(false);
+                }} />
+            ) : children}
             <div className={`fixed bottom-6 left-4 right-4 z-[300] transform transition-all duration-500 pointer-events-none ${toast ? 'translate-y-0' : 'translate-y-40'}`}>
                 {toast && (
                     <div className="bg-black text-white px-6 py-4 border-2 border-black shadow-neo mx-auto max-w-sm pointer-events-auto flex items-center gap-4">

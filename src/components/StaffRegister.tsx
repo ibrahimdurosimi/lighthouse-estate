@@ -7,8 +7,8 @@ import { AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 
 export default function StaffRegister() {
-    const { setView } = useApp();
-    const [inviteCode, setInviteCode] = useState('');
+    const { setView, viewParams } = useApp();
+    const [inviteCode, setInviteCode] = useState(viewParams.inviteCode || '');
     const [staffDocId, setStaffDocId] = useState<string | null>(null);
     const [staffData, setStaffData] = useState<any>(null);
 
@@ -28,6 +28,12 @@ export default function StaffRegister() {
     const [showPin, setShowPin] = useState(false);
     const [showConfirmPin, setShowConfirmPin] = useState(false);
     const [loading, setLoading] = useState(false);
+
+    React.useEffect(() => {
+        if (viewParams.inviteCode) {
+            verifyCode(viewParams.inviteCode);
+        }
+    }, [viewParams.inviteCode]);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string>>) => {
         if (e.target.files && e.target.files[0]) {
@@ -51,11 +57,10 @@ export default function StaffRegister() {
         }
     };
 
-    const checkInviteCode = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const verifyCode = async (code: string) => {
         setLoading(true);
         try {
-            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'users'), where('appId', '==', appId), where('inviteCode', '==', inviteCode), where('role', '==', 'staff'));
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'users'), where('appId', '==', appId), where('inviteCode', '==', code), where('role', '==', 'staff'));
             const snap = await getDocs(q);
             if (snap.empty) {
                 alert('Invalid Invite Code');
@@ -76,6 +81,11 @@ export default function StaffRegister() {
             alert('Verification failed. Try again.');
         }
         setLoading(false);
+    }
+
+    const checkInviteCode = async (e: React.FormEvent) => {
+        e.preventDefault();
+        verifyCode(inviteCode);
     };
 
     const handleCompleteProfile = async (e: React.FormEvent) => {

@@ -57,37 +57,42 @@ export default function Register() {
                 <p className="text-xs text-amber-900/80 font-medium leading-relaxed">New accounts require manual approval by the Estate Manager.</p>
             </div>
             
-            <div className="bg-white w-full max-w-sm p-8 neo-card">
+            <div className="bg-white dark:bg-stone-900 w-full max-w-sm p-8 neo-card">
                 <div className="text-center mb-6">
-                    <h2 className="text-2xl font-semibold text-brand-black tracking-tight">Unit Registry</h2>
-                    <p className="text-sm font-medium text-emerald-700 mt-1">Register your residence</p>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Unit Registry</h2>
+                    <p className="text-sm font-black text-emerald-800 dark:text-emerald-400 mt-1 uppercase tracking-widest">Register your residence</p>
                 </div>
                 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-3">
-                        <input required placeholder="First Name" value={firstName} onChange={e => setFirstName(e.target.value)} className="w-full p-3 neo-input text-sm" />
-                        <input required placeholder="Last Name" value={lastName} onChange={e => setLastName(e.target.value)} className="w-full p-3 neo-input text-sm" />
+                        <input required placeholder="First Name" value={firstName} onChange={e => setFirstName(e.target.value)} className="w-full p-3 neo-input text-sm text-gray-900 dark:text-gray-100" />
+                        <input required placeholder="Last Name" value={lastName} onChange={e => setLastName(e.target.value)} className="w-full p-3 neo-input text-sm text-gray-900 dark:text-gray-100" />
                     </div>
-                    <input required type="tel" placeholder="Phone Number" value={phone} onChange={e => setPhone(e.target.value)} className="w-full p-3 neo-input text-sm" />
-                    <input required type="email" placeholder="Email Address" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-3 neo-input text-sm" />
+                    <input required type="tel" placeholder="Phone Number" value={phone} onChange={e => setPhone(e.target.value)} className="w-full p-3 neo-input text-sm text-gray-900 dark:text-gray-100" />
+                    <input required type="email" placeholder="Email Address" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-3 neo-input text-sm text-gray-900 dark:text-gray-100" />
                     
-                    <div className="grid grid-cols-2 gap-3 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                    <div className="grid grid-cols-2 gap-3 p-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl border border-emerald-100 dark:border-emerald-800/30 transition-colors">
                         <div>
-                            <label className="text-[10px] font-semibold text-emerald-800 uppercase block mb-1">House</label>
-                            <select value={house} onChange={e => setHouse(e.target.value)} className="w-full p-2.5 bg-white border border-emerald-200 rounded-lg text-sm font-medium text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500/20">
-                                {HOUSES.map(h => <option key={h}>{h}</option>)}
-                            </select>
+                            <label className="text-[10px] font-black text-emerald-800 dark:text-emerald-400 uppercase block mb-1">House Number</label>
+                            <input 
+                                required 
+                                type="text"
+                                placeholder="e.g. 12"
+                                value={house} 
+                                onChange={e => setHouse(e.target.value)} 
+                                className="w-full p-2.5 bg-white dark:bg-stone-800 border border-emerald-200 dark:border-stone-700 rounded-lg text-sm font-bold text-emerald-950 dark:text-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                            />
                         </div>
                         <div>
-                            <label className="text-[10px] font-semibold text-emerald-800 uppercase block mb-1">Sub Unit</label>
-                            <select value={sub} onChange={e => setSub(e.target.value)} className="w-full p-2.5 bg-white border border-emerald-200 rounded-lg text-sm font-medium text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500/20">
+                            <label className="text-[10px] font-black text-emerald-800 dark:text-emerald-400 uppercase block mb-1">Sub Unit</label>
+                            <select value={sub} onChange={e => setSub(e.target.value)} className="w-full p-2.5 bg-white dark:bg-stone-800 border border-emerald-200 dark:border-stone-700 rounded-lg text-sm font-bold text-emerald-950 dark:text-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20">
                                 {SUB_OPTIONS.map(s => <option key={s}>{s}</option>)}
                             </select>
                         </div>
                     </div>
 
                     <div className="space-y-3 pt-2">
-                        <p className="text-center text-[10px] font-semibold text-emerald-700 uppercase tracking-widest block">Set Security PIN</p>
+                        <p className="text-center text-[10px] font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-widest block">Set Security PIN</p>
                         <div className="relative">
                             <input 
                                 type={showPin ? 'text' : 'password'} 
@@ -98,7 +103,7 @@ export default function Register() {
                                 placeholder="Enter PIN" 
                                 value={pin}
                                 onChange={e => setPin(e.target.value)}
-                                className="w-full p-3 neo-input font-mono text-center tracking-[0.4em] text-lg" 
+                                className="w-full p-3 neo-input font-mono text-center tracking-[0.4em] text-lg text-gray-900 dark:text-gray-100" 
                             />
                             <button type="button" onClick={() => setShowPin(!showPin)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 p-2 hover:text-brand-black transition-colors rounded">
                                 {showPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}

@@ -73,20 +73,10 @@ export default function Landing() {
                         <p className="text-xs text-gray-500 font-medium mt-0.5">Admin Console</p>
                     </div>
                 </button>
-                <div className="grid grid-cols-2 gap-4 mt-2">
-                    <button onClick={() => setView('login', { role: 'madrasa_admin' })} className="neo-card p-4 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500/30 group">
-                        <div className="bg-indigo-50 text-indigo-700 p-2 rounded-xl group-hover:bg-indigo-500 group-hover:text-white transition-colors"><BookOpen size={20} /></div>
-                        <h3 className="font-medium text-brand-black text-[13px]">Madrasa</h3>
-                    </button>
-                    <button onClick={() => setView('login', { role: 'staff' })} className="neo-card p-4 flex flex-col items-center justify-center gap-2 transition-all hover:border-orange-500/30 group">
-                        <div className="bg-orange-50 text-orange-700 p-2 rounded-xl group-hover:bg-orange-500 group-hover:text-white transition-colors"><Users size={20} /></div>
-                        <h3 className="font-medium text-brand-black text-[13px]">Staff Sign-In</h3>
-                    </button>
-                </div>
                 <div className="grid grid-cols-1 mt-2">
-                    <button onClick={() => setView('staff_register')} className="neo-card p-4 flex justify-center items-center gap-3 transition-all hover:border-gray-400/30 group">
-                        <div className="bg-gray-100 text-gray-600 p-2 rounded-xl group-hover:bg-gray-600 group-hover:text-white transition-colors"><UserPlus size={18} /></div>
-                        <h3 className="font-medium text-brand-black text-sm">Join as Staff / Worker</h3>
+                    <button onClick={() => setView('login', { role: 'madrasa_admin' })} className="neo-card p-4 flex items-center justify-center gap-4 transition-all hover:border-indigo-500/30 group">
+                        <div className="bg-indigo-50 text-indigo-700 p-3 rounded-xl group-hover:bg-indigo-500 group-hover:text-white transition-colors"><BookOpen size={22} /></div>
+                        <h3 className="font-semibold text-brand-black text-lg">Madrasa Portal</h3>
                     </button>
                 </div>
             </div>

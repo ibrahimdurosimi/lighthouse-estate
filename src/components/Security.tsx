@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LogOut, XCircle, AlertTriangle } from 'lucide-react';
+import { LogOut, XCircle, AlertTriangle, Lock } from 'lucide-react';
 import { useApp } from '../lib/context';
 import ThemeToggle from './ThemeToggle';
 import { db, appId } from '../lib/firebase';
@@ -7,7 +7,7 @@ import { collection, getDocs, updateDoc, doc, serverTimestamp, onSnapshot, query
 import clsx from 'clsx';
 
 export default function Security() {
-    const { profile, setView, setProfile, notify } = useApp();
+    const { profile, setView, setProfile, notify, isDarkMode } = useApp();
     const [codeInput, setCodeInput] = useState('');
     const [result, setResult] = useState<any>(null);
     const [activeSos, setActiveSos] = useState<any[]>([]);
@@ -28,55 +28,61 @@ export default function Security() {
         });
     };
 
-    const handleVerify = async () => {
-        const val = codeInput.toUpperCase();
-        if (!val) return;
+    const processCode = async (val: string) => {
+        if (!val || val.length < 6) return;
+        const upperVal = val.toUpperCase();
         
         try {
             const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'codes'));
             const codes = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-            const found: any = codes.find((c: any) => c.code === val);
+            const found: any = codes.find((c: any) => c.code === upperVal);
             
             if (!found || (found.status !== 'active' && found.status !== 'used') || new Date(found.expiresAt) < new Date()) {
                 setResult({ status: 'denied' });
+                // Reset after 3 seconds on fail
+                setTimeout(() => {
+                    setResult(null);
+                    setCodeInput('');
+                }, 3000);
             } else {
                 setResult({ status: 'verified', data: found });
+                // Auto Confirm
+                const isInside = found.status === 'used';
+                const isGatePass = found.type === 'Gate-Pass';
+                
+                if (isInside || isGatePass) {
+                    const nextStat = found.type === 'Long-Stay' ? 'active' : 'checked-out';
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'codes', found.id), { 
+                        status: nextStat, 
+                        checkedOutAt: serverTimestamp(), 
+                        checkedOutBy: profile?.identifier 
+                    });
+                    notify("Auto Check-out success.");
+                } else {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'codes', found.id), { 
+                        status: 'used', 
+                        usedAt: serverTimestamp(), 
+                        validatedBy: profile?.identifier 
+                    });
+                    notify("Auto Check-in success.");
+                }
+
+                // Reset after 4 seconds to show success details
+                setTimeout(() => {
+                    setResult(null);
+                    setCodeInput('');
+                }, 4000);
             }
         } catch (err) {
             notify("Network error.", "error");
         }
     };
 
-    const handleConfirm = async () => {
-        if (!result || result.status !== 'verified') return;
-        const found = result.data;
-        const isInside = found.status === 'used';
-        const isGatePass = found.type === 'Gate-Pass';
-
-        try {
-            if (isInside || isGatePass) {
-                const nextStat = found.type === 'Long-Stay' ? 'active' : 'checked-out';
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'codes', found.id), { 
-                    status: nextStat, 
-                    checkedOutAt: serverTimestamp(), 
-                    checkedOutBy: profile?.identifier 
-                });
-                notify("Check-out logged.");
-            } else {
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'codes', found.id), { 
-                    status: 'used', 
-                    usedAt: serverTimestamp(), 
-                    validatedBy: profile?.identifier 
-                });
-                notify("Check-in logged.");
-            }
-            // Reset
-            setResult(null);
-            setCodeInput('');
-        } catch(err) {
-            notify("System busy.", "error");
+    useEffect(() => {
+        if (codeInput.length === 6) {
+            processCode(codeInput);
         }
-    };
+    }, [codeInput]);
 
     const cancel = () => {
         setResult(null);
@@ -86,20 +92,20 @@ export default function Security() {
     if (!profile) return null;
 
     return (
-        <div className="max-w-md mx-auto min-h-screen flex flex-col p-6 animate-fade-in bg-stone-50/50">
-            <header className="flex justify-between items-center mb-12 border-b border-gray-200 pb-5">
+        <div className="max-w-md mx-auto min-h-screen flex flex-col p-6 animate-fade-in bg-stone-50/50 dark:bg-stone-950/50 transition-colors">
+            <header className="flex justify-between items-center mb-12 border-b border-gray-200 dark:border-stone-800 pb-5 transition-colors">
                 <div className="flex items-center gap-3">
-                    <div className="bg-emerald-900 text-white w-10 h-10 rounded-xl flex items-center justify-center font-bold shadow-sm">
+                    <div className="bg-emerald-900 dark:bg-emerald-600 text-white w-10 h-10 rounded-xl flex items-center justify-center font-bold shadow-sm">
                         <Lock className="w-5 h-5"/>
                     </div>
                     <div>
-                        <h2 className="text-[17px] font-semibold text-brand-black leading-none mb-1">Gate Hub</h2>
-                        <p className="text-[10px] text-gray-500 font-medium tracking-widest uppercase">Guard: {profile.identifier}</p>
+                        <h2 className="text-[17px] font-semibold text-brand-black dark:text-gray-100 leading-none mb-1">Gate Hub</h2>
+                        <p className="text-[10px] text-gray-500 dark:text-stone-400 font-medium tracking-widest uppercase">Guard: {profile.identifier}</p>
                     </div>
                 </div>
                 <div className="flex gap-2 items-center">
                     <ThemeToggle />
-                    <button onClick={() => { setProfile(null); setView('landing'); }} className="p-2.5 rounded-xl bg-white text-gray-600 border border-gray-200 shadow-sm hover:bg-red-50 hover:text-red-500 transition-colors">
+                    <button onClick={() => { setProfile(null); setView('landing'); }} className="p-2.5 rounded-xl bg-white dark:bg-stone-900 text-gray-600 dark:text-stone-400 border border-gray-200 dark:border-stone-800 shadow-sm hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 transition-colors">
                         <LogOut className="w-4 h-4" />
                     </button>
                 </div>
@@ -129,11 +135,11 @@ export default function Security() {
                                 value={codeInput}
                                 onChange={e => setCodeInput(e.target.value)}
                                 maxLength={6} 
-                                className="w-full py-8 rounded-3xl bg-white border border-gray-200 text-5xl font-mono text-center shadow-sm uppercase placeholder:text-gray-200 text-stone-800 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all" 
+                                className="w-full py-8 rounded-3xl bg-white dark:bg-stone-800 border border-gray-200 dark:border-stone-700 text-5xl font-mono text-center shadow-sm uppercase placeholder:text-gray-200 dark:placeholder:text-stone-700 text-stone-800 dark:text-gray-100 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-bold" 
                                 placeholder="------" 
+                                autoFocus
                             />
                         </div>
-                        <button onClick={handleVerify} className="w-full bg-emerald-900 text-white rounded-2xl py-5 text-[15px] shadow-md hover:bg-emerald-950 font-semibold uppercase tracking-wide transition-all">Verify Code</button>
                     </div>
                 ) : (
                     <div className="animate-fade-in">
@@ -155,10 +161,7 @@ export default function Security() {
                                     {result.data.note && <div className="mt-8 bg-stone-50 p-4 rounded-xl border border-stone-100 text-[13px] text-stone-600 font-medium">"{result.data.note}"</div>}
                                 </div>
                                 <div className="flex gap-3">
-                                    <button onClick={cancel} className="w-1/3 bg-stone-100 text-stone-600 font-semibold rounded-2xl py-5 uppercase text-sm hover:bg-stone-200 transition-colors">Cancel</button>
-                                    <button onClick={handleConfirm} className="flex-1 bg-emerald-900 text-white rounded-2xl py-5 text-[15px] shadow-md hover:bg-emerald-950 font-semibold uppercase tracking-wide transition-all">
-                                        {result.data.status === 'used' ? 'Check-Out' : result.data.type === 'Gate-Pass' ? 'Authorize Exit' : 'Check-In'}
-                                    </button>
+                                    <button onClick={cancel} className="w-full bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 font-bold rounded-2xl py-5 uppercase text-sm hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors">Acknowledge</button>
                                 </div>
                             </div>
                         )}

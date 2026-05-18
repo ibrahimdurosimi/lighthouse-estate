@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, LogOut, Clock, Truck, Calendar, MessageSquare, Copy, Trash2, Eye, EyeOff, AlertTriangle, Wrench, Bell, UserPlus, Info } from 'lucide-react';
+import { Settings, LogOut, Clock, Truck, Calendar, MessageSquare, Copy, Trash2, Eye, EyeOff, AlertTriangle, Wrench, Bell, UserPlus, Info, Shield, BookOpen, Users, ScanLine, ArrowRight, Search, X } from 'lucide-react';
 import { useApp } from '../lib/context';
 import ThemeToggle from './ThemeToggle';
 import { db, appId } from '../lib/firebase';
@@ -8,8 +8,9 @@ import { generateCode, formatDate, filterItemsByDate, hashPin } from '../lib/uti
 import clsx from 'clsx';
 
 export default function Resident() {
-    const { profile, setProfile, setView, notify } = useApp();
+    const { profile, setProfile, setView, notify, isDarkMode } = useApp();
     const [viewTab, setViewTab] = useState<'dash' | 'auth' | 'hist' | 'bc' | 'staff' | 'dir' | 'svcs' | 'kids' | 'tickets' | 'polls'>('dash');
+    const [activeCategory, setActiveCategory] = useState<'home' | 'security' | 'services'>('home');
     const [dateFilter, setDateFilter] = useState('all');
     
     const [codesData, setCodesData] = useState<any[]>([]);
@@ -27,12 +28,6 @@ export default function Resident() {
     const [ticketDesc, setTicketDesc] = useState('');
     const [ticketCat, setTicketCat] = useState('Electrical');
 
-    const [showAddSvc, setShowAddSvc] = useState(false);
-    const [svcTitle, setSvcTitle] = useState('');
-    const [svcDesc, setSvcDesc] = useState('');
-    const [svcCat, setSvcCat] = useState('General');
-    const [svcPhone, setSvcPhone] = useState('');
-
     const [showAddKid, setShowAddKid] = useState(false);
     const [kidName, setKidName] = useState('');
     const [kidAge, setKidAge] = useState('');
@@ -42,11 +37,18 @@ export default function Resident() {
     const [kidIceName, setKidIceName] = useState('');
     const [kidIcePhone, setKidIcePhone] = useState('');
 
+    const [showAddSvc, setShowAddSvc] = useState(false);
+    const [svcTitle, setSvcTitle] = useState('');
+    const [svcDesc, setSvcDesc] = useState('');
+    const [svcCat, setSvcCat] = useState('General');
+    const [svcPhone, setSvcPhone] = useState('');
+
     // Modals state
     const [showChangePin, setShowChangePin] = useState(false);
     const [showLS, setShowLS] = useState(false);
     const [showGatePass, setShowGatePass] = useState(false);
     const [showAddStaff, setShowAddStaff] = useState(false);
+    const [staffInvite, setStaffInvite] = useState<{name: string, code: string, role: string} | null>(null);
     const [reviewStaff, setReviewStaff] = useState<any>(null);
     const [staffComment, setStaffComment] = useState('');
     const [staffPassHours, setStaffPassHours] = useState('24');
@@ -72,7 +74,7 @@ export default function Resident() {
             const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             setServicesData(data);
         });
-        
+
         const kidsUnsub = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'madrasa_students'), snap => {
             const data = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter((k: any) => k.houseId === profile.identifier);
             setKidsData(data);
@@ -164,17 +166,17 @@ Please note that LightHouse Estate is a Muslim residential community. Residents 
 
 Thank you for your understanding and cooperation`;
 
-        if (c.type === 'Jumat' || c.type === 'Madrasa') {
+        if (c.type === 'Jumat') {
             msg = `Assalamu Alaikum Warahmatullahi Wabarakatuh,
 
 Welcome to LightHouse Estate.
 
-Your ${c.type === 'Jumat' ? 'Jumat' : 'Madrasa'} Access Details are as follows:
+Your Jumat Access Details are as follows:
 
 Access Code: ${c.code}
 Host: ${profile.identifier}
 Valid Until: ${formatDate(c.expiresAt)}
-Note: Your host has authorized you to come to the estate ${c.type === 'Jumat' ? 'mosque for Jumat service' : 'Madrasa'}.
+Note: Your host has authorized you to come to the estate mosque for Jumat service.
 
 Please note that LightHouse Estate is a Muslim residential community. Residents and visitors are kindly expected to uphold the values and peaceful environment of the estate. Alcohol, indecent dressing, and loud music are strictly prohibited.
 
@@ -256,8 +258,30 @@ Thank you for your understanding and cooperation`;
             createdAt: serverTimestamp()
         });
         setShowAddStaff(false);
-        notify(`Staff invited! Code: ${inviteCode}`);
+        setStaffInvite({ name: staffFn, code: inviteCode, role: staffRole });
         setStaffFn(''); setStaffRole(''); setStaffPhone('');
+    };
+
+    const shareStaffInvite = async (mode: 'wa' | 'cp') => {
+        if (!staffInvite) return;
+        const url = `${window.location.origin}/?view=staff_onboarding&inviteCode=${staffInvite.code}`;
+        const msg = `Assalamu Alaikum ${staffInvite.name},
+        
+You have been invited as a ${staffInvite.role} at Lighthouse Estate.
+
+Please complete your registration and onboarding using the link below:
+${url}
+
+Invite Code: ${staffInvite.code}
+
+Thank you.`;
+
+        if (mode === 'wa') {
+            window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`);
+        } else {
+            await navigator.clipboard.writeText(msg);
+            notify("Invite link copied!");
+        }
     };
 
     const handleApproveStaff = async (id: string) => {
@@ -407,55 +431,162 @@ Thank you for your understanding and cooperation`;
     if(!profile) return null;
 
     const myStaffData = staffData.filter(x => x.employerId === profile.identifier);
-    const dirStaffData = staffData.filter(x => x.employerId !== profile.identifier && x.status === 'approved' && (!searchQuery || x.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) || x.staffRole?.toLowerCase().includes(searchQuery.toLowerCase())));
+    const dirStaffData = staffData.filter(x => x.employerId !== profile.identifier && x.status === 'approved' && (!searchQuery || x.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) || x.staffRole?.toLowerCase().includes(searchQuery.toLowerCase()) || x.employerId?.toLowerCase().includes(searchQuery.toLowerCase())));
 
     return (
-        <div className="max-w-xl mx-auto min-h-screen pb-24 animate-fade-in relative bg-stone-50/50">
-            <header className="bg-white/90 backdrop-blur border-b border-brand-gray px-5 py-4 mb-2 flex justify-between items-center sticky top-0 z-20">
+        <div className="max-w-xl mx-auto min-h-screen pb-24 animate-fade-in relative bg-stone-50/50 dark:bg-stone-950/50">
+            <header className="bg-white/90 dark:bg-stone-900/90 backdrop-blur border-b border-brand-gray dark:border-stone-800 px-5 py-4 mb-2 flex justify-between items-center sticky top-0 z-20">
                 <div className="flex items-center gap-3 w-full">
-                    <div className="bg-emerald-100 text-emerald-800 w-11 h-11 rounded-full flex items-center justify-center font-bold text-lg">{profile.firstName[0]}</div>
+                    <div className="bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100 w-11 h-11 rounded-full flex items-center justify-center font-bold text-lg">{profile.firstName[0]}</div>
                     <div className="flex flex-col flex-1">
-                        <h2 className="font-semibold text-brand-black leading-tight">{profile.firstName} {profile.lastName}</h2>
-                        <p className="text-[10px] font-medium text-emerald-700 uppercase tracking-wider">{profile.identifier}</p>
+                        <h2 className="font-bold text-gray-900 dark:text-gray-100 leading-tight">{profile.firstName} {profile.lastName}</h2>
+                        <p className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-widest">{profile.identifier}</p>
                     </div>
                 </div>
                 <div className="flex gap-2">
                     <ThemeToggle />
-                    <button onClick={handleTriggerSOS} className={clsx("p-2 rounded-full transition-all flex-shrink-0", isSosActive ? "bg-red-500 text-white animate-pulse shadow-md shadow-red-500/30" : "bg-red-50 text-red-500 hover:bg-red-100")} title="TRIGGER SOS">
+                    <button onClick={handleTriggerSOS} className={clsx("p-2 rounded-full transition-all flex-shrink-0", isSosActive ? "bg-red-500 text-white animate-pulse shadow-md shadow-red-500/30" : "bg-red-50 dark:bg-red-950/30 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40")} title="TRIGGER SOS">
                         <AlertTriangle className="w-5 h-5" />
                     </button>
-                    <button onClick={() => setShowChangePin(true)} className="p-2 rounded-full bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"><Settings className="w-5 h-5" /></button>
-                    <button onClick={() => { setProfile(null); setView('landing'); }} className="p-2 rounded-full bg-gray-50 text-gray-600 hover:bg-red-50 hover:text-red-500 transition-colors flex-shrink-0"><LogOut className="w-5 h-5" /></button>
+                    <button onClick={() => setShowChangePin(true)} className="p-2 rounded-full bg-gray-50 dark:bg-stone-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-stone-700 transition-colors flex-shrink-0"><Settings className="w-5 h-5" /></button>
+                    <button onClick={() => { setProfile(null); setView('landing'); }} className="p-2 rounded-full bg-gray-50 dark:bg-stone-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 transition-colors flex-shrink-0"><LogOut className="w-5 h-5" /></button>
                 </div>
             </header>
 
             {profile.duesStatus !== 'paid' && (
-                <div className="bg-red-50 border border-red-200 p-3 mx-4 rounded-xl shadow-sm text-center mb-4 space-y-1">
+                <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-3 mx-4 rounded-xl shadow-sm text-center mb-4 space-y-1">
                     <AlertTriangle className="w-5 h-5 text-red-500 mx-auto animate-pulse" />
-                    <h3 className="font-semibold text-red-800 text-xs tracking-wide uppercase">Estate Dues Outstanding</h3>
-                    <p className="text-[10px] text-red-700/80 font-medium">Please pay your annual estate dues to ensure uninterrupted access.</p>
+                    <h3 className="font-semibold text-red-800 dark:text-red-400 text-xs tracking-wide uppercase">Estate Dues Outstanding</h3>
+                    <p className="text-[10px] text-red-700/80 dark:text-red-500/80 font-medium">Please pay your annual estate dues to ensure uninterrupted access.</p>
                 </div>
             )}
 
-            <div className="sticky top-[77px] z-10 bg-stone-50/90 backdrop-blur pb-3 pt-1 px-4 mb-4">
-                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-                    <button onClick={() => setViewTab('dash')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", viewTab === 'dash' ? "bg-emerald-900 text-white" : "bg-white text-gray-600 border border-gray-200 shadow-sm")}>Overview</button>
-                    <button onClick={() => setViewTab('auth')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", viewTab === 'auth' ? "bg-emerald-900 text-white" : "bg-white text-gray-600 border border-gray-200 shadow-sm")}>Access</button>
-                    <button onClick={() => setViewTab('tickets')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", viewTab === 'tickets' ? "bg-emerald-900 text-white" : "bg-white text-gray-600 border border-gray-200 shadow-sm")}>Fix It</button>
-                    <button onClick={() => setViewTab('polls')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", viewTab === 'polls' ? "bg-emerald-900 text-white" : "bg-white text-gray-600 border border-gray-200 shadow-sm")}>Townhall</button>
-                    <button onClick={() => setViewTab('bc')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", viewTab === 'bc' ? "bg-emerald-900 text-white" : "bg-white text-gray-600 border border-gray-200 shadow-sm")}>Notices</button>
-                    <button onClick={() => setViewTab('hist')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", viewTab === 'hist' ? "bg-emerald-900 text-white" : "bg-white text-gray-600 border border-gray-200 shadow-sm")}>Logbook</button>
-                    <button onClick={() => setViewTab('dir')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", viewTab === 'dir' ? "bg-emerald-900 text-white" : "bg-white text-gray-600 border border-gray-200 shadow-sm")}>Directory</button>
-                    <button onClick={() => setViewTab('svcs')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", viewTab === 'svcs' ? "bg-emerald-900 text-white" : "bg-white text-gray-600 border border-gray-200 shadow-sm")}>Market</button>
-                    <button onClick={() => setViewTab('staff')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", viewTab === 'staff' ? "bg-emerald-900 text-white" : "bg-white text-gray-600 border border-gray-200 shadow-sm")}>My Staff</button>
-                    <button onClick={() => setViewTab('kids')} className={clsx("px-4 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors", viewTab === 'kids' ? "bg-emerald-900 text-white" : "bg-white text-gray-600 border border-gray-200 shadow-sm")}>Madrasa</button>
+            <div className="sticky top-[77px] z-10 bg-stone-50/90 dark:bg-stone-900/90 backdrop-blur pb-3 px-4 mb-4 border-b border-gray-100 dark:border-stone-800">
+                {/* Tier 1: Parent Categories - HIDDEN as per request for more compact vertical grouping */}
+                {/* 
+                <div className="flex bg-gray-100/50 dark:bg-stone-800/50 p-1 rounded-2xl mb-3">
+                    ...
                 </div>
+                */}
+
+                {/* Vertical Categories Overview */}
+                {viewTab === 'dash' && (
+                    <div className="space-y-6 pt-2 animate-fade-in">
+                        {/* Section 1: Security & Access */}
+                        <div>
+                            <div className="flex justify-between items-center mb-3 px-1">
+                                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-stone-500">Security & Access</h3>
+                                <button onClick={() => setViewTab('hist')} className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">View Logs</button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={() => { setActiveCategory('security'); setViewTab('auth'); }} className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-start gap-3 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all group lg:flex-row lg:items-center">
+                                    <div className="bg-emerald-100 dark:bg-emerald-900/50 p-2.5 rounded-xl text-emerald-700 dark:text-emerald-400">
+                                        <UserPlus className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-left">
+                                        <span className="text-[11px] font-black uppercase tracking-wide text-gray-900 dark:text-gray-100 block">Issue Pass</span>
+                                        <span className="text-[9px] font-bold text-gray-400 dark:text-stone-500 uppercase tracking-widest mt-0.5">Quick Verify</span>
+                                    </div>
+                                </button>
+                                <button onClick={handleTriggerSOS} className="bg-rose-50 dark:bg-rose-950/20 p-4 rounded-2xl border border-rose-100 dark:border-rose-900/30 shadow-sm flex flex-col items-start gap-3 transition-all hover:bg-rose-100 dark:hover:bg-rose-900/30 lg:flex-row lg:items-center">
+                                    <div className="bg-rose-500 p-2.5 rounded-xl text-white">
+                                        <Shield className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-left">
+                                        <span className="text-[11px] font-bold uppercase tracking-wide text-rose-900 dark:text-rose-200 block">Estate SOS</span>
+                                        <span className="text-[9px] font-medium text-rose-700/60 dark:text-rose-500/60 uppercase tracking-widest mt-0.5">Emergency</span>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Section 2: Living & Community */}
+                        <div>
+                            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-stone-500 mb-3 px-1">Estate Living</h3>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={() => { setActiveCategory('home'); setViewTab('bc'); }} className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-start gap-3 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all lg:flex-row lg:items-center">
+                                    <div className="bg-sky-100 dark:bg-sky-900/50 p-2.5 rounded-xl text-sky-700 dark:text-sky-400">
+                                        <Bell className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-left">
+                                        <span className="text-[11px] font-black uppercase tracking-wide text-gray-900 dark:text-gray-100 block">Notices</span>
+                                        <span className="text-[9px] font-bold text-gray-400 dark:text-stone-500 uppercase tracking-widest mt-0.5">{noticesData.length} Recent</span>
+                                    </div>
+                                </button>
+                                <button onClick={() => { setActiveCategory('home'); setViewTab('polls'); }} className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-start gap-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all lg:flex-row lg:items-center">
+                                    <div className="bg-indigo-100 dark:bg-indigo-900/50 p-2.5 rounded-xl text-indigo-700 dark:text-indigo-400">
+                                        <MessageSquare className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-left">
+                                        <span className="text-[11px] font-black uppercase tracking-wide text-gray-900 dark:text-gray-100 block">Townhall</span>
+                                        <span className="text-[9px] font-bold text-gray-400 dark:text-stone-500 uppercase tracking-widest mt-0.5">Polls</span>
+                                    </div>
+                                </button>
+                                <button onClick={() => { setActiveCategory('services'); setViewTab('tickets'); }} className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-start gap-3 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-all lg:flex-row lg:items-center">
+                                    <div className="bg-amber-100 dark:bg-amber-900/50 p-2.5 rounded-xl text-amber-700 dark:text-amber-400">
+                                        <Wrench className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-left">
+                                        <span className="text-[11px] font-black uppercase tracking-wide text-gray-900 dark:text-gray-100 block">Fix-It</span>
+                                        <span className="text-[9px] font-bold text-gray-400 dark:text-stone-500 uppercase tracking-widest mt-0.5">Maintenance</span>
+                                    </div>
+                                </button>
+                                <button onClick={() => { setActiveCategory('services'); setViewTab('kids'); }} className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-start gap-3 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all lg:flex-row lg:items-center">
+                                    <div className="bg-emerald-100 dark:bg-emerald-900/50 p-2.5 rounded-xl text-emerald-700 dark:text-emerald-400">
+                                        <BookOpen className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-left">
+                                        <span className="text-[11px] font-black uppercase tracking-wide text-gray-900 dark:text-gray-100 block">Madrasa</span>
+                                        <span className="text-[9px] font-bold text-gray-400 dark:text-stone-500 uppercase tracking-widest mt-0.5">Kids Portal</span>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Section 3: Staff & Market */}
+                        <div>
+                            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-stone-500 mb-3 px-1">Resources</h3>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={() => { setActiveCategory('services'); setViewTab('staff'); }} className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-start gap-3 hover:bg-stone-100 dark:hover:bg-stone-800/40 transition-all lg:flex-row lg:items-center">
+                                    <div className="bg-stone-100 dark:bg-stone-800/80 p-2.5 rounded-xl text-stone-700 dark:text-stone-300">
+                                        <Users className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-left">
+                                        <span className="text-[11px] font-bold uppercase tracking-wide text-brand-black dark:text-gray-200 block">My Staff</span>
+                                        <span className="text-[9px] font-medium text-gray-400 uppercase tracking-widest mt-0.5">Management</span>
+                                    </div>
+                                </button>
+                                <button onClick={() => { setActiveCategory('services'); setViewTab('svcs'); }} className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-start gap-3 hover:bg-stone-100 dark:hover:bg-stone-800/40 transition-all lg:flex-row lg:items-center">
+                                    <div className="bg-stone-100 dark:bg-stone-800/80 p-2.5 rounded-xl text-stone-700 dark:text-stone-300">
+                                        <ScanLine className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-left">
+                                        <span className="text-[11px] font-bold uppercase tracking-wide text-brand-black dark:text-gray-200 block">Market</span>
+                                        <span className="text-[9px] font-medium text-gray-400 uppercase tracking-widest mt-0.5">Local Services</span>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Header for non-dash tabs */}
+                {viewTab !== 'dash' && (
+                    <div className="flex bg-gray-100/50 dark:bg-stone-800/50 p-1 rounded-2xl mb-3">
+                        <button 
+                            onClick={() => { setActiveCategory('home'); setViewTab('dash'); }}
+                            className="bg-white dark:bg-stone-700 py-2.5 px-4 text-[10px] font-black uppercase tracking-widest rounded-xl shadow-sm text-emerald-900 dark:text-emerald-100 flex items-center justify-center gap-2"
+                        >
+                            <ArrowRight className="w-4 h-4 rotate-180" /> Back to Dashboard
+                        </button>
+                    </div>
+                )}
             </div>
             
             <div className="px-4">
                 {viewTab !== 'dash' && (
                     <div className="flex items-center gap-2 mb-4">
-                        <select value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="bg-white text-xs font-medium text-gray-700 py-2.5 px-3 rounded-xl border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20">
+                        <select value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="bg-white dark:bg-stone-800 text-xs font-medium text-gray-700 dark:text-gray-200 py-2.5 px-3 rounded-xl border border-gray-200 dark:border-stone-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-colors">
                             <option value="all">All Time</option>
                             <option value="today">Today</option>
                             <option value="week">This Week</option>
@@ -471,23 +602,23 @@ Thank you for your understanding and cooperation`;
                     <div className="space-y-6 animate-fade-in">
                         {/* Quick Action Grid */}
                         <div className="grid grid-cols-3 gap-3">
-                            <button onClick={() => setViewTab('auth')} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center gap-2 hover:bg-emerald-50 transition-colors group">
-                                <div className="bg-emerald-100 p-2.5 rounded-xl text-emerald-700 group-hover:scale-110 transition-transform">
+                            <button onClick={() => { setActiveCategory('security'); setViewTab('auth'); }} className="bg-white dark:bg-stone-900 mb-0.5 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-center gap-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors group">
+                                <div className="bg-emerald-100 dark:bg-emerald-900/50 p-2.5 rounded-xl text-emerald-700 dark:text-emerald-400 group-hover:scale-110 transition-transform">
                                     <UserPlus className="w-5 h-5" />
                                 </div>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600">Visitor</span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">Visitor</span>
                             </button>
-                            <button onClick={() => { setViewTab('tickets'); setShowAddTicket(true); }} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center gap-2 hover:bg-amber-50 transition-colors group">
-                                <div className="bg-amber-100 p-2.5 rounded-xl text-amber-700 group-hover:scale-110 transition-transform">
+                            <button onClick={() => { setActiveCategory('services'); setViewTab('tickets'); setShowAddTicket(true); }} className="bg-white dark:bg-stone-900 mb-0.5 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-center gap-2 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors group">
+                                <div className="bg-amber-100 dark:bg-amber-900/50 p-2.5 rounded-xl text-amber-700 dark:text-amber-400 group-hover:scale-110 transition-transform">
                                     <Wrench className="w-5 h-5" />
                                 </div>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600">Fix It</span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">Fix It</span>
                             </button>
-                            <button onClick={() => setViewTab('bc')} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center gap-2 hover:bg-sky-50 transition-colors group">
-                                <div className="bg-sky-100 p-2.5 rounded-xl text-sky-700 group-hover:scale-110 transition-transform">
+                            <button onClick={() => { setActiveCategory('home'); setViewTab('bc'); }} className="bg-white dark:bg-stone-900 mb-0.5 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-center gap-2 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors group">
+                                <div className="bg-sky-100 dark:bg-sky-900/50 p-2.5 rounded-xl text-sky-700 dark:text-sky-400 group-hover:scale-110 transition-transform">
                                     <Bell className="w-5 h-5" />
                                 </div>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600">Notices</span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">Notices</span>
                             </button>
                         </div>
 
@@ -507,23 +638,23 @@ Thank you for your understanding and cooperation`;
 
                         {/* Stats Section */}
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                            <div className="bg-white dark:bg-stone-900 p-5 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm transition-colors">
                                 <div className="flex justify-between items-start mb-4">
-                                    <div className="bg-emerald-50 p-2 rounded-lg text-emerald-600">
+                                    <div className="bg-emerald-50 dark:bg-emerald-900/30 p-2 rounded-lg text-emerald-600 dark:text-emerald-400">
                                         <Clock className="w-4 h-4" />
                                     </div>
-                                    <span className="text-2xl font-bold text-brand-black">{activeCount}</span>
+                                    <span className="text-2xl font-bold text-brand-black dark:text-gray-100">{activeCount}</span>
                                 </div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Active Visitor Passes</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-stone-500">Active Visitor Passes</p>
                             </div>
-                            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                            <div className="bg-white dark:bg-stone-900 p-5 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm transition-colors">
                                 <div className="flex justify-between items-start mb-4">
-                                    <div className="bg-amber-50 p-2 rounded-lg text-amber-600">
+                                    <div className="bg-amber-50 dark:bg-amber-900/30 p-2 rounded-lg text-amber-600 dark:text-amber-400">
                                         <AlertTriangle className="w-4 h-4" />
                                     </div>
-                                    <span className="text-2xl font-bold text-brand-black">{ticketsData.filter(t => t.status === 'pending').length}</span>
+                                    <span className="text-2xl font-bold text-brand-black dark:text-gray-100">{ticketsData.filter(t => t.status === 'pending').length}</span>
                                 </div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Open Tickets</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-stone-500">Open Tickets</p>
                             </div>
                         </div>
 
@@ -532,7 +663,7 @@ Thank you for your understanding and cooperation`;
                             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                                 <div className="flex justify-between items-center mb-4">
                                     <h4 className="text-[11px] font-black uppercase tracking-widest text-gray-500">Latest Active Pass</h4>
-                                    <button onClick={() => setViewTab('auth')} className="text-[10px] font-bold text-emerald-700">View All</button>
+                                    <button onClick={() => { setActiveCategory('security'); setViewTab('auth'); }} className="text-[10px] font-bold text-emerald-700">View All</button>
                                 </div>
                                 {filteredCodes.filter(c => c.status === 'active').sort((a,b) => b.createdAt?.seconds - a.createdAt?.seconds).slice(0, 1).map(c => (
                                     <div key={c.id} className="flex items-center justify-between">
@@ -732,39 +863,63 @@ Thank you for your understanding and cooperation`;
                 )}
 
                 {viewTab === 'dir' && (
-                    <div className="space-y-4">
-                        <div className="pb-2 border-b border-gray-100 mb-4">
-                            <h3 className="font-semibold text-brand-black text-sm uppercase tracking-wide mb-1">Estate Staff Directory</h3>
-                            <p className="text-xs text-gray-500 font-medium">Browse accredited domestic staff working within the estate.</p>
+                    <div className="space-y-4 animate-fade-in">
+                        <div className="pb-3 border-b border-gray-100 dark:border-stone-800 mb-4 transition-colors">
+                            <h3 className="font-bold text-gray-900 dark:text-gray-100 text-sm uppercase tracking-wide mb-1">Estate Staff Directory</h3>
+                            <p className="text-[11px] text-gray-500 dark:text-stone-400 font-medium">Browse accredited domestic staff working within the estate.</p>
                         </div>
                         
-                        <div className="mb-6">
+                        <div className="mb-6 relative group">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-emerald-500 transition-colors" />
                             <input 
                                 type="text"
                                 placeholder="Search by name or role..." 
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full p-3.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm text-brand-black bg-white shadow-sm"
+                                className="w-full pl-11 pr-11 py-3.5 rounded-2xl border border-gray-200 dark:border-stone-800 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-stone-900 shadow-sm transition-all"
                             />
+                            {searchQuery && (
+                                <button 
+                                    onClick={() => setSearchQuery('')}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 dark:hover:bg-stone-800 rounded-full transition-colors"
+                                >
+                                    <X className="w-3.5 h-3.5 text-gray-400" />
+                                </button>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-1 gap-4">
                             {dirStaffData.map((su: any) => (
-                                <div key={su.id} className="bg-white border border-gray-200 rounded-2xl p-4 flex gap-4 shadow-sm">
-                                    <div className="w-16 h-16 bg-gray-100 rounded-xl shrink-0 overflow-hidden relative">
-                                        {su.passportPhoto ? <img src={su.passportPhoto} className="w-full h-full object-cover" alt="Staff" /> : <p className="text-center text-[9px] font-semibold text-gray-400 uppercase pt-5">No img</p>}
+                                <div key={su.id} className="bg-white dark:bg-stone-900 border border-gray-200 dark:border-stone-800 rounded-2xl p-4 flex gap-4 shadow-sm hover:shadow-md transition-all">
+                                    <div className="w-16 h-16 bg-gray-100 dark:bg-stone-800 rounded-xl shrink-0 overflow-hidden relative border border-gray-100 dark:border-stone-700">
+                                        {su.passportPhoto ? <img src={su.passportPhoto} className="w-full h-full object-cover" alt="Staff" /> : <div className="flex flex-col items-center justify-center h-full opacity-30"><Users className="w-6 h-6" /></div>}
                                     </div>
-                                    <div>
-                                        <p className="font-black text-brand-black uppercase text-sm leading-tight">{su.firstName}</p>
-                                        <p className="text-[9px] font-bold uppercase text-gray-500 tracking-widest mb-1">{su.staffRole}</p>
-                                        <p className="text-[10px] font-bold text-gray-600">Employer: <span className="text-brand-black">{su.employerId}</span></p>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-start mb-1">
+                                            <p className="font-black text-gray-900 dark:text-gray-100 uppercase text-sm leading-tight italic">{su.firstName}</p>
+                                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/50">Verified</span>
+                                        </div>
+                                        <p className="text-[10px] font-bold uppercase text-emerald-800 dark:text-emerald-400 tracking-widest mb-2">{su.staffRole}</p>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="bg-stone-100 dark:bg-stone-800 p-1 rounded-md">
+                                                <Info className="w-3 h-3 text-stone-500" />
+                                            </div>
+                                            <p className="text-[10px] font-bold text-gray-500 dark:text-stone-400">Employer: <span className="text-gray-900 dark:text-gray-200">{su.employerId}</span></p>
+                                        </div>
                                         {su.employerComment && (
-                                            <p className="text-[10px] mt-2 bg-brand-lime/30 p-2 border-l-2 border-brand-black italic text-gray-700 font-medium">"{su.employerComment}"</p>
+                                            <div className="mt-2 bg-stone-50 dark:bg-stone-800/50 p-2.5 rounded-xl border-l-4 border-emerald-500 transition-colors">
+                                                <p className="text-[10px] italic text-gray-700 dark:text-gray-300 font-medium leading-relaxed">"{su.employerComment}"</p>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
                             ))}
-                            {dirStaffData.length === 0 && <p className="text-center py-10 opacity-40 font-black text-[10px] uppercase tracking-widest col-span-2">No other approved staff in the estate.</p>}
+                            {dirStaffData.length === 0 && (
+                                <div className="text-center py-16 opacity-40">
+                                    <Search className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                                    <p className="font-black text-[10px] uppercase tracking-widest">No matching staff found</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -844,35 +999,29 @@ Thank you for your understanding and cooperation`;
                 )}
 
                 {viewTab === 'kids' && (
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center border-b border-gray-100 pb-2 mb-4">
-                            <h3 className="font-semibold text-brand-black text-sm uppercase tracking-wide">My Madrasa Kids</h3>
+                    <div className="space-y-4 animate-fade-in content-area">
+                        <div className="flex justify-between items-center border-b border-gray-100 dark:border-stone-800 pb-2 mb-4">
+                            <h3 className="font-semibold text-brand-black dark:text-gray-100 text-sm uppercase tracking-wide">My Madrasa Kids</h3>
                             <button onClick={()=>setShowAddKid(true)} className="bg-emerald-900 text-white px-4 py-2 text-[10px] rounded-lg font-semibold uppercase shadow-sm hover:bg-emerald-950 transition-colors">Enroll Child</button>
                         </div>
                         <div className="grid gap-3">
                         {kidsData.map(k => (
-                            <div key={k.id} className="bg-white p-5 rounded-2xl border border-gray-200 flex gap-4 shadow-sm">
-                                <div className="bg-emerald-50 text-emerald-700 w-12 h-12 rounded-xl flex items-center justify-center font-bold text-xl shrink-0 uppercase">
+                            <div key={k.id} className="bg-white dark:bg-stone-900 p-5 rounded-2xl border border-gray-200 dark:border-stone-800 flex gap-4 shadow-sm">
+                                <div className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 w-12 h-12 rounded-xl flex items-center justify-center font-bold text-xl shrink-0 uppercase">
                                     {k.name[0]}
                                 </div>
                                 <div className="flex-1">
-                                    <h4 className="font-semibold uppercase text-brand-black mb-0.5 text-sm tracking-wide">{k.name}</h4>
-                                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-widest">{k.age} yrs • {k.gender} • <span className="text-gray-400">DOB: {k.dob}</span></p>
+                                    <h4 className="font-semibold uppercase text-brand-black dark:text-gray-100 mb-0.5 text-sm tracking-wide">{k.name}</h4>
+                                    <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-widest">{k.age} yrs • {k.gender} • <span className="text-gray-400">DOB: {k.dob}</span></p>
                                     <div className="mt-3 space-y-2">
-                                        {k.allergies && <p className="text-[10px] font-semibold bg-rose-50 text-rose-700 rounded-lg p-2">Allergies: {k.allergies}</p>}
-                                        <p className="text-[10px] font-medium text-sky-800 bg-sky-50 rounded-lg p-2">ICE: {k.iceName} - <span className="font-mono">{k.icePhone}</span></p>
+                                        {k.allergies && <p className="text-[10px] font-semibold bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400 rounded-lg p-2">Allergies: {k.allergies}</p>}
+                                        <p className="text-[10px] font-medium text-sky-800 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20 rounded-lg p-2">ICE: {k.iceName} - <span className="font-mono">{k.icePhone}</span></p>
                                     </div>
                                 </div>
                             </div>
                         ))}
                         </div>
-                        {kidsData.length === 0 && <p className="text-[11px] text-gray-400 font-medium tracking-wide text-center py-10">No children enrolled.</p>}
-                        
-                        <div className="bg-stone-50 rounded-2xl border border-stone-200 p-5 mt-8">
-                            <h4 className="font-semibold text-stone-800 uppercase text-xs mb-2">Madrasa Passes</h4>
-                            <p className="text-[11px] font-medium text-stone-500 mb-4 leading-relaxed">You can issue a guest pass specific to Madrasa access from the Access tab. It will be valid for 6 hours.</p>
-                            <button onClick={()=> { setViewTab('auth'); issueCode('Madrasa'); }} className="w-full bg-stone-800 text-white font-semibold text-xs py-3 rounded-xl uppercase shadow-sm hover:bg-stone-900 transition-colors">Generate Madrasa Pass</button>
-                        </div>
+                        {kidsData.length === 0 && <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium tracking-wide text-center py-10">No children enrolled.</p>}
                     </div>
                 )}
                 
@@ -905,6 +1054,34 @@ Thank you for your understanding and cooperation`;
             </div>
 
             {/* Modals */}
+            {staffInvite && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[255] flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-white w-full max-w-sm p-8 rounded-[2rem] shadow-2xl text-center space-y-6">
+                        <div className="bg-emerald-100 text-emerald-800 w-20 h-20 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                            <Copy className="w-10 h-10" />
+                        </div>
+                        <div>
+                            <h3 className="text-2xl font-bold text-brand-black tracking-tight mb-2">Staff Invite Ready</h3>
+                            <p className="text-gray-500 text-sm font-medium leading-relaxed">Share this link with <span className="text-brand-black font-bold">{staffInvite.name}</span> to complete their onboarding.</p>
+                        </div>
+
+                        <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 font-mono text-emerald-800 font-bold tracking-widest text-lg">
+                            {staffInvite.code}
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3 pt-2">
+                            <button onClick={()=>shareStaffInvite('cp')} className="neo-btn-secondary py-4 flex items-center justify-center gap-2">
+                                <Copy className="w-4 h-4" />
+                                Copy Link
+                            </button>
+                            <button onClick={()=>shareStaffInvite('wa')} className="bg-[#25D366] text-white rounded-xl py-4 font-bold text-xs shadow-md hover:bg-[#128C7E] transition-all flex items-center justify-center gap-2">
+                                WhatsApp
+                            </button>
+                        </div>
+                        <button onClick={()=>setStaffInvite(null)} className="text-xs font-black uppercase tracking-widest text-gray-400 hover:text-brand-black transition-colors">Done</button>
+                    </div>
+                </div>
+            )}
             {showChangePin && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4 animate-fade-in">
                     <div className="bg-white w-full max-w-sm p-6 rounded-2xl shadow-xl relative space-y-5">
@@ -1090,37 +1267,36 @@ Thank you for your understanding and cooperation`;
 
             {showAddKid && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4 animate-fade-in">
-                    <div className="bg-white w-full max-w-sm p-6 rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto space-y-4">
-                        <h3 className="font-semibold tracking-wide uppercase text-brand-black border-b border-gray-100 pb-3 mb-2">Enroll Child</h3>
+                    <div className="bg-white dark:bg-stone-900 w-full max-w-sm p-6 rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto space-y-4">
+                        <h3 className="font-semibold tracking-wide uppercase text-brand-black dark:text-gray-100 border-b border-gray-100 dark:border-stone-800 pb-3 mb-2">Enroll Child</h3>
                         <form onSubmit={handleEnrollKid} className="space-y-4">
-                            <div><label className="text-[10px] font-semibold tracking-wide uppercase text-gray-500 block mb-1">Full Name</label><input required value={kidName} onChange={e=>setKidName(e.target.value)} className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm"/></div>
+                            <div><label className="text-[10px] font-semibold tracking-wide uppercase text-gray-500 mb-1 block">Full Name</label><input required value={kidName} onChange={e=>setKidName(e.target.value)} className="w-full p-3 neo-input text-sm"/></div>
                             <div className="grid grid-cols-2 gap-3">
-                                <div><label className="text-[10px] font-semibold tracking-wide uppercase text-gray-500 block mb-1">Age</label><input required type="number" value={kidAge} onChange={e=>setKidAge(e.target.value)} className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm"/></div>
+                                <div><label className="text-[10px] font-semibold tracking-wide uppercase text-gray-500 mb-1 block">Age</label><input required type="number" value={kidAge} onChange={e=>setKidAge(e.target.value)} className="w-full p-3 neo-input text-sm"/></div>
                                 <div>
-                                    <label className="text-[10px] font-semibold tracking-wide uppercase text-gray-500 block mb-1">Gender</label>
-                                    <select value={kidGender} onChange={e=>setKidGender(e.target.value)} className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm uppercase">
+                                    <label className="text-[10px] font-semibold tracking-wide uppercase text-gray-500 mb-1 block">Gender</label>
+                                    <select value={kidGender} onChange={e=>setKidGender(e.target.value)} className="w-full p-3 neo-input text-sm uppercase">
                                         <option>Male</option><option>Female</option>
                                     </select>
                                 </div>
                             </div>
-                            <div><label className="text-[10px] font-semibold tracking-wide uppercase text-gray-500 block mb-1">Date of Birth</label><input required type="date" value={kidDob} onChange={e=>setKidDob(e.target.value)} className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm"/></div>
-                            <div><label className="text-[10px] font-semibold tracking-wide uppercase text-gray-500 block mb-1">Allergies / Special Prep</label><input value={kidAllergies} onChange={e=>setKidAllergies(e.target.value)} className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm" placeholder="Optional"/></div>
-                            <div className="bg-sky-50 rounded-xl border border-sky-100 p-4 mt-2">
-                                <h4 className="font-semibold uppercase tracking-wide text-[10px] mb-3 text-sky-800">In Case of Emergency</h4>
+                            <div><label className="text-[10px] font-semibold tracking-wide uppercase text-gray-500 mb-1 block">Date of Birth</label><input required type="date" value={kidDob} onChange={e=>setKidDob(e.target.value)} className="w-full p-3 neo-input text-sm"/></div>
+                            <div><label className="text-[10px] font-semibold tracking-wide uppercase text-gray-500 mb-1 block">Allergies / Special Prep</label><input value={kidAllergies} onChange={e=>setKidAllergies(e.target.value)} className="w-full p-3 neo-input text-sm" placeholder="Optional"/></div>
+                            <div className="bg-sky-50 dark:bg-sky-900/20 rounded-xl border border-sky-100 dark:border-sky-800 p-4 mt-2">
+                                <h4 className="font-semibold uppercase tracking-wide text-[10px] mb-3 text-sky-800 dark:text-sky-400">In Case of Emergency</h4>
                                 <div className="space-y-3">
-                                    <input required value={kidIceName} onChange={e=>setKidIceName(e.target.value)} className="w-full p-2.5 rounded-lg border border-sky-200 focus:ring-2 focus:ring-sky-500/20 focus:outline-none text-xs" placeholder="ICE Contact Name"/>
-                                    <input required type="tel" value={kidIcePhone} onChange={e=>setKidIcePhone(e.target.value)} className="w-full p-2.5 rounded-lg border border-sky-200 focus:ring-2 focus:ring-sky-500/20 focus:outline-none text-xs font-mono" placeholder="ICE Contact Phone"/>
+                                    <input required value={kidIceName} onChange={e=>setKidIceName(e.target.value)} className="w-full p-2.5 rounded-lg border border-sky-200 dark:border-sky-800 bg-white dark:bg-stone-800 focus:ring-2 focus:ring-sky-500/20 focus:outline-none text-xs dark:text-white" placeholder="ICE Contact Name"/>
+                                    <input required type="tel" value={kidIcePhone} onChange={e=>setKidIcePhone(e.target.value)} className="w-full p-2.5 rounded-lg border border-sky-200 dark:border-sky-800 bg-white dark:bg-stone-800 focus:ring-2 focus:ring-sky-500/20 focus:outline-none text-xs font-mono dark:text-white" placeholder="ICE Contact Phone"/>
                                 </div>
                             </div>
-                            <div className="flex gap-3 pt-4 border-t border-gray-100">
-                                <button type="button" onClick={()=>setShowAddKid(false)} className="flex-1 font-semibold text-gray-500 uppercase text-[11px] hover:bg-gray-50 rounded-xl transition-colors py-3">Cancel</button>
+                            <div className="flex gap-3 pt-4 border-t border-gray-100 dark:border-stone-800">
+                                <button type="button" onClick={()=>setShowAddKid(false)} className="flex-1 font-semibold text-gray-500 uppercase text-[11px] hover:bg-gray-50 dark:hover:bg-stone-800 rounded-xl transition-colors py-3">Cancel</button>
                                 <button type="submit" className="flex-[2] bg-emerald-900 text-white rounded-xl py-3 font-semibold text-xs shadow-sm uppercase hover:bg-emerald-950 transition-colors">Enroll Child</button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
-
             {showAddTicket && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4 animate-fade-in">
                     <div className="bg-white w-full max-w-sm p-6 rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto space-y-4">

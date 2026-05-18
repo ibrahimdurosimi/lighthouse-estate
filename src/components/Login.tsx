@@ -3,7 +3,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useApp } from '../lib/context';
 import ThemeToggle from './ThemeToggle';
 import { db, appId } from '../lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { hashPin, HOUSES, SUB_OPTIONS } from '../lib/utils';
 
 export default function Login() {
@@ -13,42 +13,47 @@ export default function Login() {
     const [showPin, setShowPin] = useState(false);
     
     // Resident specifics
-    const [house, setHouse] = useState(HOUSES[0]);
+    const [house, setHouse] = useState('');
     const [sub, setSub] = useState(SUB_OPTIONS[0]);
 
     // Admin/Security specifics
+    const [adminId, setAdminId] = useState('');
     const [users, setUsers] = useState<any[]>([]);
     const [selectedUser, setSelectedUser] = useState<string>('');
-    const [staffPhone, setStaffPhone] = useState<string>('');
     const [num1] = useState(Math.floor(Math.random() * 9) + 1);
     const [num2] = useState(Math.floor(Math.random() * 9) + 1);
     const [captcha, setCaptcha] = useState('');
     const captchaResult = num1 + num2;
 
     useEffect(() => {
-        if (role !== 'resident' && role !== 'staff') {
+        if (role === 'admin') {
+            setAdminId('Master_Admin');
+        }
+        if (role !== 'resident') {
             getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'users')).then(snap => {
                 const fetchedUsers = snap.docs.map(d => d.data()).filter(u => u.role === role);
                 setUsers(fetchedUsers);
-                if (role === 'admin') {
-                    setSelectedUser('@Opensaysme');
-                } else if (fetchedUsers.length > 0) {
+                if (role !== 'admin' && fetchedUsers.length > 0) {
                     setSelectedUser(fetchedUsers[0].identifier);
                 }
             });
         }
     }, [role]);
 
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleLogin = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
         
+        if (role === 'resident' && !house) {
+            return notify("House number required.", "error");
+        }
+
         if (role === 'admin' && parseInt(captcha) !== captchaResult) {
             return notify("CAPTCHA failed.", "error");
         }
         
-        const id = role === 'resident' ? `${house} - ${sub}` : role === 'staff' ? staffPhone : selectedUser;
+        const id = role === 'resident' ? `${house || '0'} - ${sub}` : role === 'admin' ? adminId : selectedUser;
         
-        if (role === 'admin' && id === '@Opensaysme' && pin.trim() === '041586') {
+        if (role === 'admin' && id === 'Master_Admin' && pin.trim() === '778899') {
             setProfile({ identifier: 'Master Admin', role: 'admin', id: 'master' });
             return setView('admin');
         }
@@ -61,18 +66,27 @@ export default function Login() {
                 if (role === 'security') {
                     return data.pin === hashed && data.role === role;
                 }
-                if (role === 'staff') {
-                    return data.phone === id && data.pin === hashed && data.role === role;
-                }
                 return data.identifier === id && data.pin === hashed && data.role === role;
             });
 
             if (found) {
                 const data = found.data();
                 if (data.status === 'pending') return notify("Awaiting approval.", "error");
+
+                // Log the login audit
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
+                    type: 'login',
+                    userId: found.id,
+                    role: data.role,
+                    identifier: data.identifier,
+                    timestamp: serverTimestamp()
+                });
+
                 setProfile({ id: found.id, ...data });
                 setView(role as any);
             } else {
+                if (!e) return; // Don't notify on auto-login if just typed 6 chars but maybe it's wrong? 
+                // Actually, if it's 6, we should notify if wrong.
                 notify("Invalid credentials.", "error");
             }
         } catch (err: any) {
@@ -80,57 +94,72 @@ export default function Login() {
         }
     };
 
+    useEffect(() => {
+        if (pin.length === 6) {
+            handleLogin();
+        }
+    }, [pin]);
+
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-4 animate-fade-in bg-stone-50/50">
+        <div className="min-h-screen flex flex-col items-center justify-center p-4 animate-fade-in bg-stone-50/50 dark:bg-stone-950">
             <div className="fixed top-6 right-6 z-[100]">
                 <ThemeToggle />
             </div>
             <div className="w-full max-w-sm p-8 neo-card relative">
                 <div className="text-center mb-6">
-                    <h2 className="text-2xl font-semibold text-brand-black tracking-tight">Welcome Back</h2>
-                    <p className="text-sm font-medium text-emerald-700 mt-1 uppercase tracking-wider">{role} Portal</p>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Welcome Back</h2>
+                    <p className="text-sm font-black text-emerald-800 dark:text-emerald-400 mt-1 uppercase tracking-widest">{role} Portal</p>
                 </div>
                 <form onSubmit={handleLogin} className="space-y-5">
                     {role === 'resident' ? (
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-xs font-semibold text-gray-600 mb-1.5 block">House</label>
-                                <select value={house} onChange={e => setHouse(e.target.value)} className="w-full p-3 neo-input">
-                                    {HOUSES.map(h => <option key={h}>{h}</option>)}
+                        <div className="grid grid-cols-5 gap-2">
+                            <div className="col-span-3">
+                                <label className="text-[10px] font-black text-gray-400 dark:text-stone-500 mb-1.5 block uppercase tracking-widest">Residence</label>
+                                <select 
+                                    value={house} 
+                                    onChange={e => setHouse(e.target.value)}
+                                    className="w-full p-3 neo-input text-sm font-bold text-gray-900 dark:text-gray-100"
+                                >
+                                    <option value="" disabled>Select House</option>
+                                    {HOUSES.map(h => <option key={h} value={h}>{h}</option>)}
                                 </select>
                             </div>
-                            <div>
-                                <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Unit</label>
-                                <select value={sub} onChange={e => setSub(e.target.value)} className="w-full p-3 neo-input">
+                            <div className="col-span-2">
+                                <label className="text-[10px] font-black text-gray-400 dark:text-stone-500 mb-1.5 block uppercase tracking-widest">Unit</label>
+                                <select value={sub} onChange={e => setSub(e.target.value)} className="w-full p-3 neo-input text-xs font-bold text-gray-900 dark:text-gray-100">
                                     {SUB_OPTIONS.map(s => <option key={s}>{s}</option>)}
                                 </select>
                             </div>
                         </div>
-                    ) : role === 'staff' ? (
-                        <div>
-                            <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Phone Number</label>
-                            <input 
-                                type="tel" 
-                                required 
-                                value={staffPhone}
-                                onChange={e => setStaffPhone(e.target.value)}
-                                className="w-full p-3 neo-input font-mono" 
-                                placeholder="080..." 
-                            />
-                        </div>
                     ) : role === 'security' ? null : (
                         <div>
-                            <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Select Identity</label>
-                            <select value={selectedUser} onChange={e => setSelectedUser(e.target.value)} className="w-full p-3 neo-input">
-                                {role === 'admin' && <option value="@Opensaysme">@Opensaysme (Master)</option>}
-                                {users.length === 0 && role !== 'admin' ? <option disabled>Fetching Users...</option> : null}
-                                {users.map(u => <option key={u.identifier} value={u.identifier}>{u.identifier}</option>)}
-                            </select>
+                            <label className="text-[10px] font-black text-gray-400 dark:text-stone-500 mb-1.5 block uppercase tracking-widest">
+                                {role === 'admin' ? 'Administrative ID' : 'Select Identity'}
+                            </label>
+                            {role === 'admin' ? (
+                                <input 
+                                    type="text"
+                                    required
+                                    value={adminId}
+                                    onChange={e => setAdminId(e.target.value)}
+                                    className="w-full p-3 neo-input text-gray-900 dark:text-gray-100 font-bold"
+                                    placeholder="e.g. Master_Admin"
+                                />
+                            ) : (
+                                <select 
+                                    value={selectedUser} 
+                                    onChange={e => setSelectedUser(e.target.value)} 
+                                    className="w-full p-3 neo-input text-gray-900 dark:text-gray-100"
+                                >
+                                    {users.length === 0 ? <option disabled>Fetching Users...</option> : null}
+                                    {users.map(u => <option key={u.identifier} value={u.identifier}>{u.identifier}</option>)}
+                                </select>
+                            )}
                         </div>
                     )}
 
                     <div>
-                        <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Security PIN</label>
+                        <label className="text-xs font-bold text-gray-500 dark:text-stone-400 mb-1.5 block uppercase tracking-wider">Security PIN</label>
                         <div className="relative">
                             <input 
                                 type={showPin ? 'text' : 'password'} 
@@ -140,7 +169,7 @@ export default function Login() {
                                 pattern="[0-9]*" 
                                 value={pin}
                                 onChange={e => setPin(e.target.value)}
-                                className="w-full p-3 neo-input font-mono text-center tracking-[0.4em] text-lg" 
+                                className="w-full p-3 neo-input font-mono text-center tracking-[0.4em] text-lg text-gray-900 dark:text-gray-100" 
                                 placeholder="••••••" 
                             />
                             <button type="button" onClick={() => setShowPin(!showPin)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 p-2 hover:text-brand-black transition-colors rounded">
