@@ -11,6 +11,8 @@ interface AppContextType {
     profile: any;
     setProfile: (profile: any) => void;
     notify: (msg: string, type?: 'success' | 'error') => void;
+    isDarkMode: boolean;
+    toggleDarkMode: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -21,6 +23,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const [profile, setProfile] = useState<any>(null);
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isDarkMode, setIsDarkMode] = useState(() => {
+        const saved = localStorage.getItem('isDarkMode');
+        return saved ? JSON.parse(saved) : false;
+    });
+
+    useEffect(() => {
+        if (isDarkMode) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+        localStorage.setItem('isDarkMode', JSON.stringify(isDarkMode));
+    }, [isDarkMode]);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -44,6 +59,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setTimeout(() => setToast(null), 4000);
     };
 
+    const toggleDarkMode = () => setIsDarkMode(!isDarkMode);
+
     if (loading) {
         return (
             <div className="fixed inset-0 flex flex-col items-center justify-center bg-white z-[200]">
@@ -54,7 +71,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     return (
-        <AppContext.Provider value={{ view, setView, viewParams, profile, setProfile, notify }}>
+        <AppContext.Provider value={{ view, setView, viewParams, profile, setProfile, notify, isDarkMode, toggleDarkMode }}>
             {children}
             <div className={`fixed bottom-6 left-4 right-4 z-[300] transform transition-all duration-500 pointer-events-none ${toast ? 'translate-y-0' : 'translate-y-40'}`}>
                 {toast && (

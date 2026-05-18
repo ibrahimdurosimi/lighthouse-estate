@@ -13,7 +13,7 @@ function AppContent() {
     const { view } = useApp();
 
     return (
-        <main>
+        <main className="max-w-md mx-auto bg-brand-bg min-h-screen relative shadow-2xl overflow-x-hidden md:border-x md:border-brand-gray/30">
             {view === 'landing' && <Landing />}
             {view === 'login' && <Login />}
             {view === 'register' && <Register />}

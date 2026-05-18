@@ -1,5 +1,6 @@
-import { Shield, Home, ScanLine, Settings, Bell } from 'lucide-react';
+import { Shield, Home, ScanLine, Settings, Bell, BookOpen, Users, UserPlus } from 'lucide-react';
 import { useApp } from '../lib/context';
+import ThemeToggle from './ThemeToggle';
 import { db, appId } from '../lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { useState, useEffect } from 'react';
@@ -27,83 +28,94 @@ export default function Landing() {
     }, []);
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center animate-fade-in pb-12">
+        <div className="min-h-screen flex flex-col items-center p-6 text-center animate-fade-in pb-12 pt-12 md:pt-20">
+            <div className="fixed top-6 right-6 z-[100]">
+                <ThemeToggle />
+            </div>
             <div className="mb-10 w-full max-w-sm">
-                <div className="inline-flex p-6 bg-brand-lime border-4 border-brand-black rounded-full shadow-neo mb-6">
-                    <Shield className="w-10 h-10 text-brand-black" />
+                <div className="inline-flex p-5 bg-brand-lime/10 rounded-2xl mb-5 text-brand-lime">
+                    <Shield className="w-10 h-10" />
                 </div>
-                <h1 className="text-4xl font-black text-brand-black leading-none uppercase tracking-tighter mb-2">Light House</h1>
-                <p className="text-lg font-bold text-brand-black uppercase tracking-widest bg-sky-200 inline-block px-2 border-2 border-brand-black shadow-neo-sm">Estate Portal</p>
+                <h1 className="text-4xl font-semibold text-brand-black leading-tight tracking-tight mb-2">Lighthouse</h1>
+                <p className="text-sm font-medium text-emerald-700 tracking-wider uppercase">Estate Portal</p>
                 
                 <button onClick={async () => {
                     import('firebase/firestore').then(async ({ getDocs, collection }) => {
                         const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'users'));
-                        const data = snap.docs.map(d => `${d.role}: ${d.identifier}`).join('\n');
+                        const data = snap.docs.map(d => {
+                            const u = d.data();
+                            return `${u.role}: ${u.identifier}`;
+                        }).join('\n');
                         alert("Users:\n" + data);
                     });
                 }} className="absolute top-0 right-0 w-8 h-8 opacity-0">D</button>
             </div>
 
-            <div className="grid grid-cols-1 gap-5 w-full max-w-sm mb-12">
-                <button onClick={() => setView('login', { role: 'resident' })} className="neo-card p-6 flex items-center gap-5 active:translate-y-1 active:shadow-none transition-all group hover:bg-lime-50">
-                    <div className="bg-brand-black text-white p-3 rounded-xl border-2 border-brand-black"><Home /></div>
+            <div className="grid grid-cols-1 gap-4 w-full max-w-sm mb-10">
+                <button onClick={() => setView('login', { role: 'resident' })} className="neo-card p-5 flex items-center gap-4 transition-all hover:border-brand-lime/30 group">
+                    <div className="bg-emerald-50 text-emerald-700 p-3 rounded-[1rem] group-hover:bg-brand-lime group-hover:text-white transition-colors"><Home size={22} /></div>
                     <div className="text-left">
-                        <h3 className="font-black text-brand-black uppercase text-lg leading-none">Residents</h3>
-                        <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest mt-1">Manage Access</p>
+                        <h3 className="font-semibold text-brand-black text-lg">Residents</h3>
+                        <p className="text-xs text-gray-500 font-medium mt-0.5">Manage Access & Home</p>
                     </div>
                 </button>
-                <button onClick={() => setView('login', { role: 'security' })} className="neo-card p-6 flex items-center gap-5 active:translate-y-1 active:shadow-none transition-all group hover:bg-pink-50">
-                    <div className="bg-brand-black text-white p-3 rounded-xl border-2 border-brand-black"><ScanLine /></div>
+                <button onClick={() => setView('login', { role: 'security' })} className="neo-card p-5 flex items-center gap-4 transition-all hover:border-amber-500/30 group">
+                    <div className="bg-amber-50 text-amber-700 p-3 rounded-[1rem] group-hover:bg-amber-500 group-hover:text-white transition-colors"><ScanLine size={22} /></div>
                     <div className="text-left">
-                        <h3 className="font-black text-brand-black uppercase text-lg leading-none">Security</h3>
-                        <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest mt-1">Verification</p>
+                        <h3 className="font-semibold text-brand-black text-lg">Security</h3>
+                        <p className="text-xs text-gray-500 font-medium mt-0.5">Verify Visitors & SOS</p>
                     </div>
                 </button>
-                <button onClick={() => setView('login', { role: 'admin' })} className="neo-card p-6 flex items-center gap-5 active:translate-y-1 active:shadow-none transition-all group hover:bg-sky-50">
-                    <div className="bg-brand-black text-white p-3 rounded-xl border-2 border-brand-black"><Settings /></div>
+                <button onClick={() => setView('login', { role: 'admin' })} className="neo-card p-5 flex items-center gap-4 transition-all hover:border-brand-cyan/30 group">
+                    <div className="bg-teal-50 text-teal-700 p-3 rounded-[1rem] group-hover:bg-brand-cyan group-hover:text-white transition-colors"><Settings size={22} /></div>
                     <div className="text-left">
-                        <h3 className="font-black text-brand-black uppercase text-lg leading-none">Management</h3>
-                        <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest mt-1">Admin Console</p>
+                        <h3 className="font-semibold text-brand-black text-lg">Management</h3>
+                        <p className="text-xs text-gray-500 font-medium mt-0.5">Admin Console</p>
                     </div>
                 </button>
-                <div className="grid grid-cols-2 gap-4 mt-1">
-                    <button onClick={() => setView('login', { role: 'madrasa_admin' })} className="neo-card p-4 flex flex-col items-center justify-center gap-2 active:translate-y-1 active:shadow-none transition-all hover:bg-purple-50">
-                        <h3 className="font-black text-brand-black uppercase text-xs text-center">Madrasa Admin</h3>
-                        <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest text-center">Manage School</p>
+                <div className="grid grid-cols-2 gap-4 mt-2">
+                    <button onClick={() => setView('login', { role: 'madrasa_admin' })} className="neo-card p-4 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500/30 group">
+                        <div className="bg-indigo-50 text-indigo-700 p-2 rounded-xl group-hover:bg-indigo-500 group-hover:text-white transition-colors"><BookOpen size={20} /></div>
+                        <h3 className="font-medium text-brand-black text-[13px]">Madrasa</h3>
                     </button>
-                    <button onClick={() => setView('login', { role: 'staff' })} className="neo-card p-4 flex flex-col items-center justify-center gap-2 active:translate-y-1 active:shadow-none transition-all hover:bg-orange-50">
-                        <h3 className="font-black text-brand-black uppercase text-xs text-center">Staff Portal</h3>
-                        <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest text-center">Sign In</p>
+                    <button onClick={() => setView('login', { role: 'staff' })} className="neo-card p-4 flex flex-col items-center justify-center gap-2 transition-all hover:border-orange-500/30 group">
+                        <div className="bg-orange-50 text-orange-700 p-2 rounded-xl group-hover:bg-orange-500 group-hover:text-white transition-colors"><Users size={20} /></div>
+                        <h3 className="font-medium text-brand-black text-[13px]">Staff Sign-In</h3>
                     </button>
                 </div>
-                <div className="grid grid-cols-1 mt-1">
-                    <button onClick={() => setView('staff_register')} className="neo-card p-4 flex flex-col items-center justify-center gap-2 active:translate-y-1 active:shadow-none transition-all hover:bg-gray-100">
-                        <h3 className="font-black text-brand-black uppercase text-xs">Staff Join</h3>
-                        <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">Register</p>
+                <div className="grid grid-cols-1 mt-2">
+                    <button onClick={() => setView('staff_register')} className="neo-card p-4 flex justify-center items-center gap-3 transition-all hover:border-gray-400/30 group">
+                        <div className="bg-gray-100 text-gray-600 p-2 rounded-xl group-hover:bg-gray-600 group-hover:text-white transition-colors"><UserPlus size={18} /></div>
+                        <h3 className="font-medium text-brand-black text-sm">Join as Staff / Worker</h3>
                     </button>
                 </div>
             </div>
 
             {notices.length > 0 && (
-                <div className="w-full max-w-sm mb-6 border-b-4 border-brand-black pb-6 space-y-4 text-left">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Bell className="w-5 h-5 text-brand-black" />
-                        <h3 className="font-black text-lg text-brand-black uppercase">Estate Notices</h3>
+                <div className="w-full max-w-sm mb-8 space-y-4 text-left">
+                    <div className="flex items-center gap-2 mb-2 px-1">
+                        <Bell className="w-5 h-5 text-emerald-700" />
+                        <h3 className="font-semibold text-lg text-brand-black">Estate Notices</h3>
                     </div>
                     {notices.slice(0, 3).sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0)).map(n => (
-                        <div key={n.id} className="bg-white p-4 neo-card relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-8 h-8 bg-brand-lime border-l-4 border-b-4 border-brand-black" />
-                            <h4 className="font-black text-brand-black text-sm uppercase mb-1">{n.title}</h4>
-                            <p className="text-[11px] font-bold text-gray-600 line-clamp-2 leading-relaxed">{n.content}</p>
-                            <p className="text-[8px] font-bold mt-3 text-brand-black font-mono tracking-widest">{(n.createdAt?.toDate ? n.createdAt.toDate() : new Date(n.createdAt)).toLocaleDateString()}</p>
+                        <div key={n.id} className="bg-white p-5 rounded-2xl border border-brand-gray/50 shadow-sm">
+                            <h4 className="font-semibold text-brand-black text-sm mb-1.5">{n.title}</h4>
+                            <p className="text-[13px] text-gray-600 line-clamp-2 leading-relaxed">{n.content}</p>
+                            <p className="text-[10px] text-gray-400 font-medium mt-3 uppercase tracking-wider">
+                                {(n.createdAt?.toDate ? n.createdAt.toDate() : new Date(n.createdAt)).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            </p>
                         </div>
                     ))}
                 </div>
             )}
 
-            <div className="w-full max-w-sm bg-gray-50 border-2 border-brand-black p-6 shadow-none">
-                <p className="text-[9px] font-black text-brand-black uppercase tracking-widest mb-3 bg-brand-pink inline-block px-2 border border-brand-black">Daily Hadith</p>
-                <p className="text-brand-black text-sm font-bold italic leading-relaxed">"{dailyHadith.text}"</p>
+            <div className="w-full max-w-sm bg-brand-pink/10 rounded-2xl p-6 border border-brand-pink/20 text-center relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <BookOpen size={48} className="text-brand-pink" />
+                </div>
+                <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-widest mb-2 relative z-10">Daily Reminder</p>
+                <p className="text-brand-black text-[15px] font-medium italic leading-relaxed relative z-10 transition-colors">"{dailyHadith.text}"</p>
+                <p className="text-xs text-amber-700/80 mt-3 font-medium relative z-10">— {dailyHadith.source}</p>
             </div>
         </div>
     );

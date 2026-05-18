@@ -1,32 +1,71 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-brand-lime: #00FF66;
-  --color-brand-pink: #FFE500;
-  --color-brand-cyan: #0055FF;
-  --color-brand-black: #1A1A1A;
+  --color-brand-lime: #10b981; /* Emerald */
+  --color-brand-pink: #d4af37; /* Gold / Sand */
+  --color-brand-cyan: #0f766e; /* Teal */
+  --color-brand-black: #022c22; /* Very dark green/black */
   --color-brand-white: #ffffff;
-  --color-brand-bg: #F4F1ED;
-  --color-brand-gray: #EAE7E1;
+  --color-brand-bg: #f5f5f4; /* Stone 50 */
+  --color-brand-gray: #e7e5e4; /* Stone 200 */
 
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
 
-  --shadow-neo: 12px 12px 0px 0px rgba(0,0,0,1);
-  --shadow-neo-sm: 4px 4px 0px 0px rgba(0,0,0,1);
+  --shadow-neo: 0 10px 25px -5px rgba(2, 44, 34, 0.1), 0 8px 10px -6px rgba(2, 44, 34, 0.05);
+  --shadow-neo-sm: 0 4px 6px -1px rgba(2, 44, 34, 0.05), 0 2px 4px -2px rgba(2, 44, 34, 0.05);
+  
+  --radius-neo: 1rem;
 }
 
 @layer base {
   body {
-    @apply font-sans bg-brand-bg text-brand-black;
+    @apply font-sans bg-stone-900 text-brand-black dark:text-gray-100 transition-colors duration-300;
     -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Global dark mode overrides for common components */
+  .dark .bg-stone-50\/50 {
+    @apply bg-stone-950/50;
+  }
+  .dark .bg-stone-50 {
+    @apply bg-stone-950;
+  }
+  .dark .bg-stone-50\/90 {
+    @apply bg-stone-950/90;
+  }
+  .dark .bg-brand-bg {
+    @apply bg-stone-950;
+  }
+  .dark .bg-white {
+    @apply bg-stone-900;
+  }
+  .dark .bg-white\/90 {
+    @apply bg-stone-900/90;
+  }
+  .dark .border-gray-100, .dark .border-gray-200, .dark .border-brand-gray {
+    @apply border-stone-800;
+  }
+  .dark .text-brand-black {
+    @apply text-gray-100;
+  }
+  .dark .text-gray-600, .dark .text-gray-500, .dark .text-stone-600 {
+    @apply text-stone-400;
+  }
+  .dark .text-stone-700 {
+    @apply text-stone-300;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight text-brand-black dark:text-gray-100;
   }
 }
 
 @layer utilities {
-  .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+  .animate-fade-in { animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
   @keyframes fadeIn { 
-    from { opacity: 0; transform: translateY(8px); } 
+    from { opacity: 0; transform: translateY(12px); } 
     to { opacity: 1; transform: translateY(0); } 
   }
 
@@ -42,18 +81,18 @@
   }
 
   .neo-card {
-    @apply bg-white border-4 border-brand-black shadow-neo;
+    @apply bg-white dark:bg-stone-900 rounded-[1.25rem] shadow-neo border border-brand-gray/50 dark:border-stone-800 transition-colors;
   }
 
   .neo-btn-primary {
-    @apply bg-brand-black text-white border-4 border-brand-black font-black uppercase tracking-widest outline-none disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-brand-black dark:bg-emerald-600 text-white rounded-xl font-semibold tracking-wide outline-none disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:bg-emerald-900 dark:hover:bg-emerald-500 shadow-neo-sm;
   }
 
   .neo-btn-secondary {
-    @apply bg-white text-brand-black border-4 border-brand-black font-black uppercase tracking-widest outline-none hover:bg-brand-gray disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-white dark:bg-stone-800 text-brand-black dark:text-gray-200 border border-brand-gray dark:border-stone-700 rounded-xl font-semibold tracking-wide outline-none hover:bg-brand-bg dark:hover:bg-stone-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm;
   }
 
   .neo-input {
-    @apply bg-white border-4 border-brand-black text-brand-black font-bold outline-none focus:bg-brand-gray;
+    @apply bg-brand-bg/50 dark:bg-stone-800/50 border border-brand-gray dark:border-stone-700 rounded-xl text-brand-black dark:text-gray-200 font-medium outline-none focus:bg-white dark:focus:bg-stone-800 focus:border-brand-lime focus:ring-4 focus:ring-brand-lime/10 transition-all;
   }
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useApp } from '../lib/context';
+import ThemeToggle from './ThemeToggle';
 import { db, appId } from '../lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { hashPin, HOUSES, SUB_OPTIONS } from '../lib/utils';
@@ -80,43 +81,47 @@ export default function Login() {
     };
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-4 animate-fade-in">
-            <div className="bg-white w-full max-w-sm p-8 neo-card border-4 rounded-xl relative">
-                <div className="absolute -top-5 left-1/2 -translate-x-1/2 bg-brand-lime px-4 py-1 border-2 border-brand-black shadow-neo-sm">
-                    <h2 className="text-lg font-black text-brand-black uppercase tracking-tight">Login</h2>
+        <div className="min-h-screen flex flex-col items-center justify-center p-4 animate-fade-in bg-stone-50/50">
+            <div className="fixed top-6 right-6 z-[100]">
+                <ThemeToggle />
+            </div>
+            <div className="w-full max-w-sm p-8 neo-card relative">
+                <div className="text-center mb-6">
+                    <h2 className="text-2xl font-semibold text-brand-black tracking-tight">Welcome Back</h2>
+                    <p className="text-sm font-medium text-emerald-700 mt-1 uppercase tracking-wider">{role} Portal</p>
                 </div>
-                <form onSubmit={handleLogin} className="space-y-6 mt-4">
+                <form onSubmit={handleLogin} className="space-y-5">
                     {role === 'resident' ? (
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="text-[10px] font-black uppercase text-brand-black mb-1 block">House</label>
-                                <select value={house} onChange={e => setHouse(e.target.value)} className="w-full p-3 neo-input rounded-none">
+                                <label className="text-xs font-semibold text-gray-600 mb-1.5 block">House</label>
+                                <select value={house} onChange={e => setHouse(e.target.value)} className="w-full p-3 neo-input">
                                     {HOUSES.map(h => <option key={h}>{h}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="text-[10px] font-black uppercase text-brand-black mb-1 block">Unit</label>
-                                <select value={sub} onChange={e => setSub(e.target.value)} className="w-full p-3 neo-input rounded-none">
+                                <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Unit</label>
+                                <select value={sub} onChange={e => setSub(e.target.value)} className="w-full p-3 neo-input">
                                     {SUB_OPTIONS.map(s => <option key={s}>{s}</option>)}
                                 </select>
                             </div>
                         </div>
                     ) : role === 'staff' ? (
                         <div>
-                            <label className="text-[10px] font-black uppercase text-brand-black mb-1 block">Phone Number</label>
+                            <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Phone Number</label>
                             <input 
                                 type="tel" 
                                 required 
                                 value={staffPhone}
                                 onChange={e => setStaffPhone(e.target.value)}
-                                className="w-full p-3 neo-input rounded-none font-mono tracking-widest" 
+                                className="w-full p-3 neo-input font-mono" 
                                 placeholder="080..." 
                             />
                         </div>
                     ) : role === 'security' ? null : (
                         <div>
-                            <label className="text-[10px] font-black uppercase text-brand-black mb-1 block">Select Identity</label>
-                            <select value={selectedUser} onChange={e => setSelectedUser(e.target.value)} className="w-full p-3 neo-input rounded-none">
+                            <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Select Identity</label>
+                            <select value={selectedUser} onChange={e => setSelectedUser(e.target.value)} className="w-full p-3 neo-input">
                                 {role === 'admin' && <option value="@Opensaysme">@Opensaysme (Master)</option>}
                                 {users.length === 0 && role !== 'admin' ? <option disabled>Fetching Users...</option> : null}
                                 {users.map(u => <option key={u.identifier} value={u.identifier}>{u.identifier}</option>)}
@@ -125,7 +130,7 @@ export default function Login() {
                     )}
 
                     <div>
-                        <label className="text-[10px] font-black uppercase text-brand-black mb-1 block">Security PIN</label>
+                        <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Security PIN</label>
                         <div className="relative">
                             <input 
                                 type={showPin ? 'text' : 'password'} 
@@ -135,20 +140,20 @@ export default function Login() {
                                 pattern="[0-9]*" 
                                 value={pin}
                                 onChange={e => setPin(e.target.value)}
-                                className="w-full p-3 neo-input rounded-none font-mono text-center tracking-[0.4em] text-lg" 
+                                className="w-full p-3 neo-input font-mono text-center tracking-[0.4em] text-lg" 
                                 placeholder="••••••" 
                             />
-                            <button type="button" onClick={() => setShowPin(!showPin)} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-black p-2 hover:bg-gray-100 rounded">
+                            <button type="button" onClick={() => setShowPin(!showPin)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 p-2 hover:text-brand-black transition-colors rounded">
                                 {showPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                             </button>
                         </div>
                     </div>
 
                     {role === 'admin' && (
-                        <div className="bg-sky-100 p-4 border-2 border-brand-black">
-                            <p className="text-[10px] font-black uppercase text-brand-black mb-2">Anti-Bot Puzzle</p>
-                            <div className="flex items-center gap-3">
-                                <span className="font-black text-brand-black text-lg">{num1} + {num2} = </span>
+                        <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+                            <p className="text-xs font-semibold text-emerald-800 mb-3 text-center">Security Check</p>
+                            <div className="flex items-center justify-center gap-3">
+                                <span className="font-semibold text-emerald-900 text-lg">{num1} + {num2} = </span>
                                 <input 
                                     type="number" 
                                     required 
@@ -156,20 +161,20 @@ export default function Login() {
                                     pattern="[0-9]*"
                                     value={captcha}
                                     onChange={e => setCaptcha(e.target.value)}
-                                    className="w-16 p-2 neo-input text-center font-bold" 
+                                    className="w-20 p-2 neo-input text-center font-semibold" 
                                     placeholder="?" 
                                 />
                             </div>
                         </div>
                     )}
 
-                    <button type="submit" className="w-full neo-btn-primary py-4 text-sm active:translate-y-1 active:shadow-none shadow-neo transition-all">Authenticate</button>
+                    <button type="submit" className="w-full neo-btn-primary py-3.5 mt-2 text-sm">Authenticate</button>
                 </form>
             </div>
             {role === 'resident' && (
-                <button onClick={() => setView('register')} className="mt-8 text-brand-black font-black uppercase text-[10px] tracking-widest underline decoration-2 decoration-brand-lime p-2">New Unit Registration</button>
+                <button onClick={() => setView('register')} className="mt-8 text-emerald-700 font-semibold text-sm hover:text-emerald-900 transition-colors">New Unit Registration →</button>
             )}
-            <button onClick={() => setView('landing')} className="mt-4 text-gray-500 font-bold text-[10px] uppercase tracking-widest p-2 hover:text-brand-black">Return Home</button>
+            <button onClick={() => setView('landing')} className="mt-4 text-gray-400 font-medium text-sm hover:text-brand-black transition-colors">Return Home</button>
         </div>
     );
 }

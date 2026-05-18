@@ -4,6 +4,7 @@ import { db, appId } from '../lib/firebase';
 import { collection, getDocs, updateDoc, doc, query, where } from 'firebase/firestore';
 import { hashPin } from '../lib/utils';
 import { AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import ThemeToggle from './ThemeToggle';
 
 export default function StaffRegister() {
     const { setView } = useApp();
@@ -33,7 +34,7 @@ export default function StaffRegister() {
             const file = e.target.files[0];
             const reader = new FileReader();
             reader.onload = (ev) => {
-                const img = new Image();
+                const img = document.createElement('img');
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
                     const MAX_WIDTH = 600;
@@ -108,7 +109,10 @@ export default function StaffRegister() {
     };
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-4 animate-fade-in">
+        <div className="min-h-screen flex flex-col items-center justify-center p-4 animate-fade-in relative bg-stone-50/50">
+            <div className="fixed top-6 right-6 z-[100]">
+                <ThemeToggle />
+            </div>
             <div className="w-full max-w-sm mb-6 bg-brand-pink border-4 border-brand-black p-4 shadow-neo-sm opacity-80">
                 <p className="font-black text-[10px] text-brand-black uppercase tracking-widest mb-1 flex items-center gap-2"><AlertTriangle className="w-3 h-3" /> Identity Verification</p>
                 <p className="text-[11px] text-brand-black font-medium leading-tight">Staff onboarding requires verified national credentials.</p>

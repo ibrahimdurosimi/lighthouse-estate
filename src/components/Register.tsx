@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { useApp } from '../lib/context';
+import ThemeToggle from './ThemeToggle';
 import { db, appId } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { hashPin, HOUSES, SUB_OPTIONS } from '../lib/utils';
@@ -47,32 +48,46 @@ export default function Register() {
     };
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-4 animate-fade-in">
-            <div className="w-full max-w-sm mb-6 bg-brand-pink border-4 border-brand-black p-4 shadow-neo-sm opacity-80">
-                <p className="font-black text-[10px] text-brand-black uppercase tracking-widest mb-1 flex items-center gap-2"><AlertTriangle className="w-3 h-3" /> Approval Notice</p>
-                <p className="text-[11px] text-brand-black font-medium leading-tight">New accounts require manual approval by the Estate Manager.</p>
+        <div className="min-h-screen flex flex-col items-center justify-center p-4 animate-fade-in bg-stone-50/50 py-12">
+            <div className="fixed top-6 right-6 z-[100]">
+                <ThemeToggle />
             </div>
-            <div className="bg-white w-full max-w-sm p-8 neo-card border-4 rounded-xl">
-                <h2 className="text-xl font-black text-brand-black text-center mb-8 uppercase tracking-tighter">Unit Registry</h2>
+            <div className="w-full max-w-sm mb-5 bg-amber-50 border border-amber-200 p-4 rounded-xl shadow-sm text-center">
+                <p className="font-semibold text-[11px] text-amber-800 uppercase tracking-widest mb-1.5 flex items-center justify-center gap-1.5"><AlertTriangle className="w-4 h-4" /> Approval Required</p>
+                <p className="text-xs text-amber-900/80 font-medium leading-relaxed">New accounts require manual approval by the Estate Manager.</p>
+            </div>
+            
+            <div className="bg-white w-full max-w-sm p-8 neo-card">
+                <div className="text-center mb-6">
+                    <h2 className="text-2xl font-semibold text-brand-black tracking-tight">Unit Registry</h2>
+                    <p className="text-sm font-medium text-emerald-700 mt-1">Register your residence</p>
+                </div>
+                
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-3">
-                        <input required placeholder="First Name" value={firstName} onChange={e => setFirstName(e.target.value)} className="w-full p-3 neo-input text-xs" />
-                        <input required placeholder="Last Name" value={lastName} onChange={e => setLastName(e.target.value)} className="w-full p-3 neo-input text-xs" />
+                        <input required placeholder="First Name" value={firstName} onChange={e => setFirstName(e.target.value)} className="w-full p-3 neo-input text-sm" />
+                        <input required placeholder="Last Name" value={lastName} onChange={e => setLastName(e.target.value)} className="w-full p-3 neo-input text-sm" />
                     </div>
-                    <input required type="tel" placeholder="Phone Number" value={phone} onChange={e => setPhone(e.target.value)} className="w-full p-3 neo-input text-xs" />
-                    <input required type="email" placeholder="Email Address" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-3 neo-input text-xs" />
+                    <input required type="tel" placeholder="Phone Number" value={phone} onChange={e => setPhone(e.target.value)} className="w-full p-3 neo-input text-sm" />
+                    <input required type="email" placeholder="Email Address" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-3 neo-input text-sm" />
                     
-                    <div className="grid grid-cols-2 gap-3 p-4 bg-brand-gray border-4 border-brand-black">
-                        <select value={house} onChange={e => setHouse(e.target.value)} className="w-full p-2 bg-white border-2 border-brand-black text-xs font-bold">
-                            {HOUSES.map(h => <option key={h}>{h}</option>)}
-                        </select>
-                        <select value={sub} onChange={e => setSub(e.target.value)} className="w-full p-2 bg-white border-2 border-brand-black text-xs font-bold">
-                            {SUB_OPTIONS.map(s => <option key={s}>{s}</option>)}
-                        </select>
+                    <div className="grid grid-cols-2 gap-3 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                        <div>
+                            <label className="text-[10px] font-semibold text-emerald-800 uppercase block mb-1">House</label>
+                            <select value={house} onChange={e => setHouse(e.target.value)} className="w-full p-2.5 bg-white border border-emerald-200 rounded-lg text-sm font-medium text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500/20">
+                                {HOUSES.map(h => <option key={h}>{h}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-semibold text-emerald-800 uppercase block mb-1">Sub Unit</label>
+                            <select value={sub} onChange={e => setSub(e.target.value)} className="w-full p-2.5 bg-white border border-emerald-200 rounded-lg text-sm font-medium text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500/20">
+                                {SUB_OPTIONS.map(s => <option key={s}>{s}</option>)}
+                            </select>
+                        </div>
                     </div>
 
                     <div className="space-y-3 pt-2">
-                        <p className="text-center text-[10px] font-black text-brand-black uppercase tracking-widest bg-brand-lime inline-block px-2 border-2 border-brand-black mx-auto block">Set Security PIN</p>
+                        <p className="text-center text-[10px] font-semibold text-emerald-700 uppercase tracking-widest block">Set Security PIN</p>
                         <div className="relative">
                             <input 
                                 type={showPin ? 'text' : 'password'} 
@@ -85,8 +100,8 @@ export default function Register() {
                                 onChange={e => setPin(e.target.value)}
                                 className="w-full p-3 neo-input font-mono text-center tracking-[0.4em] text-lg" 
                             />
-                            <button type="button" onClick={() => setShowPin(!showPin)} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-black p-2">
-                                {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            <button type="button" onClick={() => setShowPin(!showPin)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 p-2 hover:text-brand-black transition-colors rounded">
+                                {showPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                             </button>
                         </div>
                         <div className="relative">
@@ -101,16 +116,16 @@ export default function Register() {
                                 onChange={e => setConfirmPin(e.target.value)}
                                 className="w-full p-3 neo-input font-mono text-center tracking-[0.4em] text-lg" 
                             />
-                            <button type="button" onClick={() => setShowConfirmPin(!showConfirmPin)} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-black p-2">
-                                {showConfirmPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            <button type="button" onClick={() => setShowConfirmPin(!showConfirmPin)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 p-2 hover:text-brand-black transition-colors rounded">
+                                {showConfirmPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                             </button>
                         </div>
                     </div>
 
-                    <button type="submit" className="w-full neo-btn-primary py-4 text-sm shadow-neo active:translate-y-1 active:shadow-none transition-all mt-4">Submit Registry</button>
+                    <button type="submit" className="w-full neo-btn-primary py-3.5 text-sm mt-4">Submit Registry</button>
                 </form>
             </div>
-            <button onClick={() => setView('landing')} className="mt-6 text-gray-500 font-bold text-[10px] uppercase tracking-widest p-2 hover:text-brand-black">Cancel</button>
+            <button onClick={() => setView('landing')} className="mt-6 text-gray-400 font-medium text-sm hover:text-brand-black transition-colors">Cancel & Return</button>
         </div>
     );
 }
