@@ -5,6 +5,7 @@ import ThemeToggle from './ThemeToggle';
 import { db, appId } from '../lib/firebase';
 import { collection, onSnapshot, updateDoc, deleteDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { filterItemsByDate, formatDate, hashPin, HOUSES, SUB_OPTIONS } from '../lib/utils';
+import { EmailTriggers } from '../lib/email';
 import clsx from 'clsx';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Legend, AreaChart, Area } from 'recharts';
 import { startOfDay, startOfWeek, startOfMonth, format, eachDayOfInterval, eachHourOfInterval, isWithinInterval, subDays, subWeeks } from 'date-fns';
@@ -80,7 +81,13 @@ export default function Admin() {
     const filteredCodes = filterItemsByDate(codesData, 'createdAt', admFilter);
 
     const approveUser = async (id: string) => {
+        const user = usersData.find(u => u.id === id);
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', id), { status: 'approved' });
+        
+        if (user && user.email) {
+            EmailTriggers.accountApproved(user.email, user.firstName || user.identifier);
+        }
+        
         notify("Approved.");
     };
 
@@ -103,18 +110,22 @@ export default function Admin() {
     // New Admin State
     const [amFn, setAmFn] = useState('');
     const [amLn, setAmLn] = useState('');
+    const [amId, setAmId] = useState('');
     const [amRole, setAmRole] = useState('security');
     const [amPin, setAmPin] = useState('');
     const [showAmPin, setShowAmPin] = useState(false);
     
     const handleAddAdmin = async () => {
-        if (!amFn || amPin.trim().length !== 6) return alert("Required info missing.");
+        if (!amFn || (amRole !== 'madrasa' && amPin.trim().length !== 6)) return alert("Required info missing.");
+        const finalId = amRole === 'admin' ? amId : amFn;
+        if (amRole === 'admin' && !amId) return alert("Administrative ID required.");
+        
         try {
             const hashed = await hashPin(amPin.trim());
             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'users'), { 
                 firstName: amFn, 
                 lastName: amLn, 
-                identifier: amFn, 
+                identifier: finalId, 
                 pin: hashed, 
                 role: amRole, 
                 status: 'approved', 
@@ -122,7 +133,7 @@ export default function Admin() {
             });
             setShowAddAdmin(false);
             notify("Account created.");
-            setAmFn(''); setAmLn(''); setAmRole('security'); setAmPin('');
+            setAmFn(''); setAmLn(''); setAmId(''); setAmRole('security'); setAmPin('');
         } catch(err) {
             notify("Error creating account.", "error");
         }
@@ -706,8 +717,8 @@ export default function Admin() {
                                                             {u.role === 'staff' && <button onClick={()=>setViewStaff(u)} className="text-teal-600 font-semibold uppercase text-[9px] hover:text-teal-700 transition-colors">View Info</button>}
                                                             {u.role === 'resident' && <button onClick={()=>setViewUserFull(u)} className="text-teal-600 font-semibold uppercase text-[9px] hover:text-teal-700 transition-colors">View Info</button>}
                                                             {u.status === 'pending' && u.role === 'resident' && <button onClick={()=>approveUser(u.id)} className="text-emerald-600 font-semibold uppercase text-[9px] hover:text-emerald-700 transition-colors">Approve</button>}
-                                                            {u.status !== 'pending_employee_completion' && <button onClick={()=>resetPin(u.id, u.firstName)} className="text-gray-500 font-semibold uppercase text-[9px] hover:text-gray-700 transition-colors">Reset PIN</button>}
-                                                            <button onClick={()=>deleteUser(u.id)} className="text-rose-500 font-semibold uppercase text-[9px] hover:text-rose-600 transition-colors">Delete</button>
+                                                            {u.status !== 'pending_employee_completion' && u.identifier !== 'master' && u.id !== 'master' && <button onClick={()=>resetPin(u.id, u.firstName)} className="text-gray-500 font-semibold uppercase text-[9px] hover:text-gray-700 transition-colors">Reset PIN</button>}
+                                                            {u.identifier !== 'master' && u.id !== 'master' && u.identifier !== 'Master_Admin' && <button onClick={()=>deleteUser(u.id)} className="text-rose-500 font-semibold uppercase text-[9px] hover:text-rose-600 transition-colors">Delete</button>}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -762,15 +773,20 @@ export default function Admin() {
                     <div className="bg-white w-full max-w-sm p-6 rounded-2xl shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
                         <h3 className="text-lg font-semibold border-b border-gray-100 text-brand-black pb-3 uppercase tracking-wide">New Admin Profile</h3>
                         <div className="space-y-3">
-                            <input className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm" placeholder="First Name" value={amFn} onChange={e=>setAmFn(e.target.value)}/>
-                            <input className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm" placeholder="Last Name" value={amLn} onChange={e=>setAmLn(e.target.value)}/>
-                            <select className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm" value={amRole} onChange={e=>setAmRole(e.target.value)}>
+                            <div className="grid grid-cols-2 gap-2">
+                                <input className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm" placeholder="First Name" value={amFn} onChange={e=>setAmFn(e.target.value)}/>
+                                <input className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm" placeholder="Last Name" value={amLn} onChange={e=>setAmLn(e.target.value)}/>
+                            </div>
+                            {amRole === 'admin' && (
+                                <input className="w-full p-3 rounded-xl border-2 border-emerald-500/20 bg-emerald-50/10 focus:border-emerald-500 focus:outline-none text-sm font-bold" placeholder="Administrative Login ID (e.g. Ibrahim_Mgmt)" value={amId} onChange={e=>setAmId(e.target.value)}/>
+                            )}
+                            <select className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm font-semibold" value={amRole} onChange={e=>setAmRole(e.target.value)}>
                                 <option value="security">Security Guard</option>
-                                <option value="admin">Administrator</option>
-                                <option value="madrasa_admin">Madrasa Admin</option>
+                                <option value="admin">Estate Administrator</option>
+                                <option value="madrasa_admin">Madrasa Official</option>
                             </select>
                             <div className="relative">
-                                <input type={showAmPin ? "text" : "password"} maxLength={6} inputMode="numeric" pattern="[0-9]*" placeholder="Initial 6-Digit PIN" value={amPin} onChange={e=>setAmPin(e.target.value)} className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none font-mono text-center tracking-widest text-lg"/>
+                                <input type={showAmPin ? "text" : "password"} maxLength={6} inputMode="numeric" pattern="[0-9]*" placeholder="Assign 6-Digit PIN" value={amPin} onChange={e=>setAmPin(e.target.value)} className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none font-mono text-center tracking-widest text-lg"/>
                                 <button onClick={()=>setShowAmPin(!showAmPin)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-emerald-700 p-2 transition-colors">{showAmPin ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}</button>
                             </div>
                         </div>

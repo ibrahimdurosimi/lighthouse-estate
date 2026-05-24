@@ -1,6 +1,8 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Estate Magic",
+  "description": "Secure estate management platform for access control, SOS alerts, and resident directory.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
