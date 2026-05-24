@@ -36,7 +36,7 @@ export default function Staff() {
                 </div>
                 <div className="flex gap-2">
                     <ThemeToggle />
-                    <button onClick={() => { setProfile(null); setView('landing'); }} className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-600 hover:bg-rose-50 hover:text-rose-500 transition-colors shadow-sm"><LogOut className="w-5 h-5 cursor-pointer" /></button>
+                    <button onClick={() => { setProfile(null); setView('login'); }} className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-600 hover:bg-rose-50 hover:text-rose-500 transition-colors shadow-sm"><LogOut className="w-5 h-5 cursor-pointer" /></button>
                 </div>
             </header>
 

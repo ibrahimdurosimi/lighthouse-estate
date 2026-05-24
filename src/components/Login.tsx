@@ -7,7 +7,7 @@ import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore
 import { hashPin, HOUSES, SUB_OPTIONS } from '../lib/utils';
 
 export default function Login() {
-    const { viewParams, setView, setProfile, notify } = useApp();
+    const { viewParams, setView, setProfile, notify, lang, setLang, t } = useApp();
     const [role, setRole] = useState(viewParams?.role || 'resident');
     const [pin, setPin] = useState('');
     const [showPin, setShowPin] = useState(false);
@@ -26,8 +26,13 @@ export default function Login() {
     const [captchaResult, setCaptchaResult] = useState(num1 + num2);
     
     // Brutal Security Additions
-    const [failedAttempts, setFailedAttempts] = useState(() => parseInt(localStorage.getItem(`failCount_${role}`) || '0'));
-    const [lockoutTime, setLockoutTime] = useState(() => parseInt(localStorage.getItem(`lockoutTime_${role}`) || '0'));
+    const [failedAttempts, setFailedAttempts] = useState(() => parseInt(localStorage.getItem(`failCount_${role}`) || '0') || 0);
+    const [lockoutTime, setLockoutTime] = useState(() => parseInt(localStorage.getItem(`lockoutTime_${role}`) || '0') || 0);
+
+    useEffect(() => {
+        setFailedAttempts(parseInt(localStorage.getItem(`failCount_${role}`) || '0') || 0);
+        setLockoutTime(parseInt(localStorage.getItem(`lockoutTime_${role}`) || '0') || 0);
+    }, [role]);
     
     // OTP 2FA Additions
     const [pending2FADoc, setPending2FADoc] = useState<any>(null);
@@ -52,7 +57,7 @@ export default function Login() {
     const handleLogin = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         
-        if (Date.now() < lockoutTime) {
+        if (lockoutTime > 0 && Date.now() < lockoutTime) {
             const minutesLeft = Math.ceil((lockoutTime - Date.now()) / 60000);
             return notify(`Account locked. Try again in ${minutesLeft} minute(s).`, "error");
         }
@@ -211,11 +216,23 @@ export default function Login() {
     }
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-4 animate-fade-in bg-stone-50/50 dark:bg-stone-950">
-            <div className="fixed top-6 right-6 z-[100]">
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-4 animate-fade-in bg-stone-50/50 dark:bg-stone-950 overflow-y-auto no-scrollbar">
+            <div className="fixed top-6 right-6 z-[100] flex items-center gap-3">
+                <button 
+                    onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} 
+                    className="w-10 h-10 rounded-full bg-white dark:bg-stone-900 border border-gray-200 dark:border-stone-800 shadow-sm flex items-center justify-center font-bold text-xs text-gray-700 dark:text-gray-300 transition-colors"
+                >
+                    {lang === 'en' ? 'ع' : 'EN'}
+                </button>
                 <ThemeToggle />
             </div>
-            <div className="w-full max-w-sm p-8 neo-card relative">
+
+            <div className="w-full max-w-sm mb-6 mt-16 text-center">
+                <h1 className="text-3xl font-bold tracking-tight text-brand-black dark:text-white mb-2">Lighthouse</h1>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-800 dark:text-emerald-400">Estate Portal</p>
+            </div>
+
+            <div className="w-full max-w-sm p-8 neo-card relative mb-12">
                 <div className="flex gap-1.5 mb-6 p-1 bg-stone-100 dark:bg-stone-900 rounded-xl overflow-x-auto no-scrollbar">
                     {['resident', 'security', 'admin', 'madrasa_admin'].map(r => (
                         <button
@@ -229,25 +246,25 @@ export default function Login() {
                     ))}
                 </div>
                 <div className="text-center mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Welcome Back</h2>
-                    <p className="text-sm font-black text-emerald-800 dark:text-emerald-400 mt-1 uppercase tracking-widest">{role.replace('_', ' ')} Portal</p>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">{t('welcome')}</h2>
+                    <p className="text-sm font-black text-emerald-800 dark:text-emerald-400 mt-1 uppercase tracking-widest">{t(`${role}_portal` as any)}</p>
                 </div>
                 <form onSubmit={handleLogin} className="space-y-5">
                     {role === 'resident' ? (
                         <div className="grid grid-cols-5 gap-2">
                             <div className="col-span-3">
-                                <label className="text-[10px] font-black text-gray-400 dark:text-stone-500 mb-1.5 block uppercase tracking-widest">Residence</label>
+                                <label className="text-[10px] font-black text-gray-400 dark:text-stone-500 mb-1.5 block uppercase tracking-widest">{t('residence')}</label>
                                 <select 
                                     value={house} 
                                     onChange={e => setHouse(e.target.value)}
                                     className="w-full p-3 neo-input text-sm font-bold text-gray-900 dark:text-gray-100"
                                 >
-                                    <option value="" disabled>Select House</option>
+                                    <option value="" disabled>{t('select_house')}</option>
                                     {HOUSES.map(h => <option key={h} value={h}>{h}</option>)}
                                 </select>
                             </div>
                             <div className="col-span-2">
-                                <label className="text-[10px] font-black text-gray-400 dark:text-stone-500 mb-1.5 block uppercase tracking-widest">Unit</label>
+                                <label className="text-[10px] font-black text-gray-400 dark:text-stone-500 mb-1.5 block uppercase tracking-widest">{t('unit')}</label>
                                 <select value={sub} onChange={e => setSub(e.target.value)} className="w-full p-3 neo-input text-xs font-bold text-gray-900 dark:text-gray-100">
                                     {SUB_OPTIONS.map(s => <option key={s}>{s}</option>)}
                                 </select>
@@ -281,7 +298,7 @@ export default function Login() {
                     )}
 
                     <div>
-                        <label className="text-xs font-bold text-gray-500 dark:text-stone-400 mb-1.5 block uppercase tracking-wider">Security PIN</label>
+                        <label className="text-xs font-bold text-gray-500 dark:text-stone-400 mb-1.5 block uppercase tracking-wider">{t('security_pin')}</label>
                         <div className="relative">
                             <input 
                                 type={showPin ? 'text' : 'password'} 
@@ -319,13 +336,22 @@ export default function Login() {
                         </div>
                     )}
 
-                    <button type="submit" className="w-full neo-btn-primary py-3.5 mt-2 text-sm">Authenticate</button>
+                    <button type="submit" className="w-full neo-btn-primary py-3.5 mt-2 text-sm">{t('authenticate')}</button>
                 </form>
             </div>
             {role === 'resident' && (
-                <button onClick={() => setView('register')} className="mt-8 text-emerald-700 font-semibold text-sm hover:text-emerald-900 transition-colors">New Unit Registration →</button>
+                <button onClick={() => setView('register')} className="mt-8 mb-6 text-emerald-700 font-semibold text-sm hover:text-emerald-900 transition-colors">{t('new_unit')}</button>
             )}
-            <button onClick={() => setView('landing')} className="mt-4 text-gray-400 font-medium text-sm hover:text-brand-black transition-colors">Return Home</button>
+
+            {/* Hadith of the Day Module */}
+            <div className="w-full max-w-sm mt-auto mb-6 p-5 bg-white dark:bg-stone-900 rounded-2xl shadow-sm border border-emerald-100 dark:border-emerald-900/40 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none transition-transform group-hover:scale-110">
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-16 h-16 text-emerald-900 dark:text-emerald-400"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm4.59-12.42L10 14.17l-2.59-2.58L6 13l4 4 8-8z"/></svg>
+                </div>
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-emerald-800 dark:text-emerald-400 mb-2">Hadith of the Day</h3>
+                <p className="text-sm italic font-medium text-gray-700 dark:text-gray-300 border-l-2 border-emerald-500 pl-3">"The best of you are those who are best to their families, and I am the best of you to my family."</p>
+                <p className="text-[9px] font-bold text-gray-400 dark:text-stone-500 mt-2 text-right uppercase">— Sunan At-Tirmidhi</p>
+            </div>
         </div>
     );
 }

@@ -4,6 +4,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import SplashScreen from '../components/SplashScreen';
 
 type View = 'landing' | 'login' | 'register' | 'resident' | 'security' | 'admin' | 'staff_register' | 'staff' | 'madrasa_admin';
+import { Lang, getTranslation } from './i18n';
 
 interface AppContextType {
     view: View;
@@ -14,20 +15,26 @@ interface AppContextType {
     notify: (msg: string, type?: 'success' | 'error') => void;
     isDarkMode: boolean;
     toggleDarkMode: () => void;
+    lang: Lang;
+    setLang: (l: Lang) => void;
+    t: (key: any) => string;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-    const [view, setViewState] = useState<View>('landing');
+    const [view, setViewState] = useState<View>('login');
     const [viewParams, setViewParams] = useState<any>({});
     const [profile, setProfile] = useState<any>(null);
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
     const [loading, setLoading] = useState(true);
     const [showSplash, setShowSplash] = useState(true);
+    const [lang, setLangState] = useState<Lang>(() => {
+        return (localStorage.getItem('appLang') as Lang) || 'en';
+    });
     const [isDarkMode, setIsDarkMode] = useState(() => {
         const saved = localStorage.getItem('isDarkMode');
-        return saved ? JSON.parse(saved) : false;
+        return saved ? JSON.parse(saved) : true;
     });
 
     useEffect(() => {
@@ -38,6 +45,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         localStorage.setItem('isDarkMode', JSON.stringify(isDarkMode));
     }, [isDarkMode]);
+
+    useEffect(() => {
+        document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+        localStorage.setItem('appLang', lang);
+    }, [lang]);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -73,17 +85,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const toggleDarkMode = () => setIsDarkMode(!isDarkMode);
 
+    const t = (key: any) => getTranslation(lang, key);
+
     if (loading) {
         return (
-            <div className="fixed inset-0 flex flex-col items-center justify-center bg-white z-[200]">
-                <div className="w-16 h-16 border-4 border-black border-t-brand-lime rounded-full animate-spin"></div>
-                <p className="mt-6 text-black font-black tracking-widest uppercase text-xs">Loading System...</p>
+            <div className="fixed inset-0 flex flex-col items-center justify-center bg-white dark:bg-stone-950 z-[200]">
+                <div className="w-16 h-16 border-4 border-gray-200 border-t-emerald-600 rounded-full animate-spin"></div>
+                <p className="mt-6 text-gray-800 dark:text-gray-200 font-black tracking-widest uppercase text-xs">Loading System...</p>
             </div>
         );
     }
 
     return (
-        <AppContext.Provider value={{ view, setView, viewParams, profile, setProfile, notify, isDarkMode, toggleDarkMode }}>
+        <AppContext.Provider value={{ view, setView, viewParams, profile, setProfile, notify, isDarkMode, toggleDarkMode, lang, setLang: setLangState, t }}>
             {showSplash ? (
                 <SplashScreen onFinish={() => {
                     localStorage.setItem('hasSeenSplash', 'true');

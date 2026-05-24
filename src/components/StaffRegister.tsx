@@ -110,7 +110,7 @@ export default function StaffRegister() {
                 updatedAt: new Date()
             });
             notify('Profile completed! Pending approval from your employer.');
-            setView('landing');
+            setView('login');
         } catch (error) {
             console.error(error);
             notify('Failed to complete profile.', 'error');
@@ -204,7 +204,7 @@ export default function StaffRegister() {
                     </form>
                 )}
             </div>
-            <button onClick={() => setView('landing')} className="mt-6 text-gray-500 font-bold text-[10px] uppercase tracking-widest p-2 hover:text-brand-black">Cancel</button>
+            <button onClick={() => setView('login')} className="mt-6 text-gray-500 font-bold text-[10px] uppercase tracking-widest p-2 hover:text-brand-black">Cancel</button>
         </div>
     );
 }

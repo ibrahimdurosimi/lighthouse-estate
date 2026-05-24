@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Eye, EyeOff, Menu, Home, Users, Bell, X, Wrench, MessageSquare, BookOpen, Clock, Activity, Building, CircleDollarSign, PlusCircle } from 'lucide-react';
+import { LogOut, Eye, EyeOff, Menu, Home, Users, Bell, X, Wrench, MessageSquare, BookOpen, Clock, Activity, Building, CircleDollarSign, PlusCircle, QrCode, Copy } from 'lucide-react';
 import { useApp } from '../lib/context';
+import { generateCode } from '../lib/utils';
 import ThemeToggle from './ThemeToggle';
 import { db, appId } from '../lib/firebase';
 import { collection, onSnapshot, updateDoc, deleteDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -11,8 +12,8 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import { startOfDay, startOfWeek, startOfMonth, format, eachDayOfInterval, eachHourOfInterval, isWithinInterval, subDays, subWeeks } from 'date-fns';
 
 export default function Admin() {
-    const { profile, setView, setProfile, notify, isDarkMode } = useApp();
-    const [admTab, setAdmTab] = useState<'analytics' | 'directory' | 'ledger' | 'notices' | 'tickets' | 'polls' | 'dues'>('analytics');
+    const { profile, setView, setProfile, notify, isDarkMode, lang, t } = useApp();
+    const [admTab, setAdmTab] = useState<'analytics' | 'directory' | 'ledger' | 'notices' | 'tickets' | 'polls' | 'dues' | 'passes'>('analytics');
     const [menuOpen, setMenuOpen] = useState(false);
     const [admFilter, setAdmFilter] = useState('all');
     
@@ -38,6 +39,10 @@ export default function Admin() {
 
     const [showAddAdmin, setShowAddAdmin] = useState(false);
     const [viewStaff, setViewStaff] = useState<any>(null);
+    const [showPassGen, setShowPassGen] = useState(false);
+    const [pgType, setPgType] = useState('Guest');
+    const [pgHouse, setPgHouse] = useState('');
+    const [pgName, setPgName] = useState('');
 
     useEffect(() => {
         const usersUnsub = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), snap => {
@@ -186,6 +191,35 @@ export default function Admin() {
         window.scrollTo(0, 0);
     };
 
+    const handleGeneratePass = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const code = generateCode();
+        let durationMin = pgType === 'Delivery' ? 15 : (pgType === 'Jumat' ? 180 : (pgType === 'Long-Stay' ? 43200 : 30));
+        let note = pgType === 'Jumat' ? 'Admin generated Jumat pass' : 'Admin generated override pass';
+        const exp = new Date(Date.now() + durationMin * 60000);
+
+        try {
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'codes'), {
+                appId,
+                houseId: pgHouse,
+                code,
+                targetName: pgName || pgType,
+                type: pgType,
+                note,
+                status: 'active',
+                createdAt: serverTimestamp(),
+                expiresAt: exp.toISOString(),
+                createdBy: profile.identifier
+            });
+            setShowPassGen(false);
+            setPgHouse('');
+            setPgName('');
+            notify("Pass generated successfully.");
+        } catch(err) {
+            notify("Failed to generate pass", "error");
+        }
+    };
+
     const handleDeleteNotice = async (id: string) => {
         if (window.confirm("Permanently delete notice?")) {
             await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'notices', id));
@@ -278,16 +312,17 @@ export default function Admin() {
     const timelineData = getTimelineData();
 
     return (
-        <div className="max-w-4xl mx-auto min-h-screen pb-24 animate-fade-in relative bg-stone-50/50 dark:bg-stone-950/50 transition-colors">
-            <header className="flex flex-col gap-2 mb-6 text-brand-black dark:text-gray-100">
-                <div className="flex justify-between items-center border-b border-gray-200 dark:border-stone-800 pb-3 p-4 sticky top-0 bg-white dark:bg-stone-900/95 backdrop-blur z-20 transition-colors shadow-sm">
+        <div className="absolute inset-0 flex flex-col bg-stone-50/50 dark:bg-stone-950/50 transition-colors">
+            <div className="flex-1 overflow-y-auto no-scrollbar pb-24">
+                <header className="flex flex-col gap-2 mb-6 text-brand-black dark:text-gray-100">
+                    <div className="flex justify-between items-center border-b border-gray-200 dark:border-stone-800 pb-3 p-4 sticky top-0 bg-white dark:bg-stone-900/95 backdrop-blur z-20 transition-colors shadow-sm">
                     <div>
                         <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">Estate Mgmt</h1>
                         <p className="text-[10px] text-emerald-800 dark:text-emerald-400 font-bold tracking-widest uppercase mt-0.5">Oversight Console</p>
                     </div>
                     <div className="flex gap-3 items-center">
                         <ThemeToggle />
-                        <button onClick={() => { setProfile(null); setView('landing'); }} className="p-2.5 bg-gray-50 dark:bg-stone-800 text-gray-600 dark:text-stone-400 rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 transition-colors">
+                        <button onClick={() => { setProfile(null); setView('login'); }} className="p-2.5 bg-gray-50 dark:bg-stone-800 text-gray-600 dark:text-stone-400 rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 transition-colors">
                             <LogOut className="w-5 h-5"/>
                         </button>
                     </div>
@@ -717,6 +752,57 @@ export default function Admin() {
                     </div>
                 )}
 
+                {admTab === 'passes' && (
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center px-1 mb-2">
+                            <h2 className="text-sm text-brand-black font-semibold tracking-wide uppercase">All Passes</h2>
+                            <button onClick={()=>setShowPassGen(true)} className="bg-emerald-900 text-white px-4 py-2 rounded-lg text-[10px] font-semibold uppercase shadow-sm hover:bg-emerald-950 transition-colors">New Pass</button>
+                        </div>
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-[11px] text-left">
+                                    <thead className="bg-gray-50 border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-500">
+                                        <tr>
+                                            <th className="p-4 font-semibold">Code / Type</th>
+                                            <th className="p-4 font-semibold">Target / Unit</th>
+                                            <th className="p-4 font-semibold">Status</th>
+                                            <th className="p-4 font-semibold text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {codesData.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map(code => (
+                                            <tr key={code.id} className="hover:bg-gray-50/50 transition-colors">
+                                                <td className="p-4">
+                                                    <p className="font-mono text-gray-900 font-bold tracking-widest">{code.code}</p>
+                                                    <p className="text-[10px] text-gray-500 font-medium uppercase mt-0.5">{code.type}</p>
+                                                </td>
+                                                <td className="p-4">
+                                                    <p className="font-medium text-gray-900 text-[11px] uppercase">{code.targetName}</p>
+                                                    <p className="text-[10px] text-gray-500 font-medium uppercase mt-0.5">Unit {code.houseId}</p>
+                                                </td>
+                                                <td className="p-4">
+                                                    <span className={clsx("px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wide", code.status === 'active' ? "bg-emerald-100 text-emerald-800" : code.status === 'used' ? "bg-sky-100 text-sky-800" : "bg-gray-100 text-gray-500")}>
+                                                        {code.status}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4 text-right">
+                                                    {code.status === 'active' && (
+                                                        <button onClick={async () => {
+                                                            if(window.confirm('Disable this pass?')) {
+                                                                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'codes', code.id), { status: 'disabled' });
+                                                            }
+                                                        }} className="text-rose-500 font-bold uppercase text-[9px] hover:text-rose-600 transition-colors">Disable</button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {admTab === 'ledger' && (
                     <div className="space-y-4">
                         <div className="flex justify-between items-center px-1 mb-2"><h2 className="text-sm text-brand-black font-semibold tracking-wide uppercase">Master Ledger</h2></div>
@@ -753,6 +839,30 @@ export default function Admin() {
                     </div>
                 )}
             </div>
+
+            {showPassGen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-white dark:bg-stone-900 border border-transparent dark:border-stone-800 w-full max-w-sm p-6 rounded-2xl shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+                        <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl p-3 mb-2 text-center shadow-sm text-emerald-800 dark:text-emerald-300">
+                            <h3 className="text-sm font-semibold tracking-wide uppercase">Generate Override Pass</h3>
+                        </div>
+                        <form onSubmit={handleGeneratePass} className="space-y-4">
+                            <select value={pgType} onChange={e=>setPgType(e.target.value)} className="w-full p-3 rounded-lg border border-gray-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm cursor-pointer">
+                                <option value="Guest">Guest Pass</option>
+                                <option value="Delivery">Delivery Pass</option>
+                                <option value="Jumat">Jumat Pass</option>
+                            </select>
+                            <input required className="w-full p-3 rounded-lg border border-gray-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm placeholder:text-gray-400" placeholder="House/Unit Name" value={pgHouse} onChange={e=>setPgHouse(e.target.value)} />
+                            <input className="w-full p-3 rounded-lg border border-gray-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm placeholder:text-gray-400" placeholder="Guest Name (Optional)" value={pgName} onChange={e=>setPgName(e.target.value)} />
+
+                            <div className="flex gap-3 pt-4 border-t border-gray-100 dark:border-stone-800">
+                                <button type="button" onClick={()=>setShowPassGen(false)} className="flex-1 font-semibold text-gray-500 dark:text-stone-400 uppercase text-[11px] hover:bg-gray-50 dark:hover:bg-stone-800 rounded-xl transition-colors">Cancel</button>
+                                <button type="submit" className="flex-[2] bg-emerald-600 text-white rounded-xl py-3 font-semibold text-xs shadow-sm uppercase hover:bg-emerald-700 transition-colors">Generate Pass</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {showAddAdmin && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4 animate-fade-in">
@@ -902,16 +1012,17 @@ export default function Admin() {
                     </div>
                 </div>
             )}
+            </div>
 
             {/* iOS Style Bottom Navigation */}
-            <div className="fixed sm:absolute bottom-0 left-0 w-full bg-white/90 dark:bg-stone-900/90 backdrop-blur-md border-t border-gray-100 dark:border-stone-800 flex items-center justify-around pb-6 pt-3 px-2 z-40 transition-colors">
+            <div className="absolute bottom-0 w-full bg-white/90 dark:bg-stone-900/90 backdrop-blur-md border-t border-gray-100 dark:border-stone-800 flex items-center justify-around pb-6 pt-3 px-2 z-40 transition-colors">
                 <button onClick={() => setAdmTab('analytics')} className={`flex flex-col items-center gap-1 p-2 ${admTab === 'analytics' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-stone-500'}`}>
                     <Activity className="w-6 h-6" />
-                    <span className="text-[10px] h-[12px] font-bold">Stats</span>
+                    <span className="text-[10px] h-[12px] font-bold">{t('stats')}</span>
                 </button>
                 <button onClick={() => setAdmTab('directory')} className={`flex flex-col items-center gap-1 p-2 ${admTab === 'directory' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-stone-500'}`}>
                     <Users className="w-6 h-6" />
-                    <span className="text-[10px] h-[12px] font-bold">Users</span>
+                    <span className="text-[10px] h-[12px] font-bold">{t('users')}</span>
                 </button>
                 <div className="-mt-8">
                     <button onClick={() => setShowAddAdmin(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white p-4 rounded-full shadow-lg shadow-emerald-500/30 transform transition-transform active:scale-95 border-4 border-stone-100 dark:border-stone-950">
@@ -920,11 +1031,11 @@ export default function Admin() {
                 </div>
                 <button onClick={() => setAdmTab('notices')} className={`flex flex-col items-center gap-1 p-2 ${admTab === 'notices' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-stone-500'}`}>
                     <Bell className="w-6 h-6" />
-                    <span className="text-[10px] h-[12px] font-bold">News</span>
+                    <span className="text-[10px] h-[12px] font-bold">{t('news')}</span>
                 </button>
                 <button onClick={() => setMenuOpen(true)} className={`flex flex-col items-center gap-1 p-2 text-gray-400 dark:text-stone-500 hover:text-gray-600 dark:hover:text-stone-400`}>
                     <Menu className="w-6 h-6" />
-                    <span className="text-[10px] h-[12px] font-bold">Menu</span>
+                    <span className="text-[10px] h-[12px] font-bold">{t('menu')}</span>
                 </button>
             </div>
 
@@ -932,25 +1043,28 @@ export default function Admin() {
             {menuOpen && (
                 <div className="fixed inset-0 z-[300] flex">
                     <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={() => setMenuOpen(false)}></div>
-                    <div className="relative w-64 bg-white dark:bg-stone-900 border-r border-gray-100 dark:border-stone-800 h-full flex flex-col shadow-2xl transition-transform duration-300 animate-slide-in-left">
+                    <div className={"relative w-64 bg-white dark:bg-stone-900 border-x border-gray-100 dark:border-stone-800 h-full flex flex-col shadow-2xl transition-transform duration-300 " + (lang === 'ar' ? 'animate-slide-in-right left-auto right-0' : 'animate-slide-in-left')}>
                         <div className="p-5 border-b border-gray-100 dark:border-stone-800 flex justify-between items-center bg-gray-50/50 dark:bg-stone-800/50">
-                            <span className="font-bold text-gray-900 dark:text-gray-100">Admin Menu</span>
+                            <span className="font-bold text-gray-900 dark:text-gray-100">{t('admin_menu')}</span>
                             <button onClick={() => setMenuOpen(false)} className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-stone-300 transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
                         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
                             <button onClick={() => { setAdmTab('ledger'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${admTab === 'ledger' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
-                                <BookOpen className="w-5 h-5" /> <span className="font-semibold text-sm">Ledger</span>
+                                <BookOpen className="w-5 h-5" /> <span className="font-semibold text-sm">{t('ledger')}</span>
                             </button>
                             <button onClick={() => { setAdmTab('dues'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${admTab === 'dues' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
-                                <CircleDollarSign className="w-5 h-5" /> <span className="font-semibold text-sm">Estate Dues</span>
+                                <CircleDollarSign className="w-5 h-5" /> <span className="font-semibold text-sm">{t('dues')}</span>
                             </button>
                             <button onClick={() => { setAdmTab('tickets'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${admTab === 'tickets' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
-                                <Wrench className="w-5 h-5" /> <span className="font-semibold text-sm">Tickets & Fix-It</span>
+                                <Wrench className="w-5 h-5" /> <span className="font-semibold text-sm">{t('tickets')}</span>
                             </button>
                             <button onClick={() => { setAdmTab('polls'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${admTab === 'polls' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
-                                <MessageSquare className="w-5 h-5" /> <span className="font-semibold text-sm">Townhall</span>
+                                <MessageSquare className="w-5 h-5" /> <span className="font-semibold text-sm">{t('townhall')}</span>
+                            </button>
+                            <button onClick={() => { setAdmTab('passes'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${admTab === 'passes' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
+                                <QrCode className="w-5 h-5" /> <span className="font-semibold text-sm">Passes</span>
                             </button>
                         </div>
                     </div>

@@ -41,7 +41,7 @@ export default function Register() {
                 createdAt: serverTimestamp()
             });
             notify("Salaam, Registry Submitted.");
-            setView('landing');
+            setView('login');
         } catch(err) { 
             notify("System busy.", "error"); 
         }
@@ -130,7 +130,7 @@ export default function Register() {
                     <button type="submit" className="w-full neo-btn-primary py-3.5 text-sm mt-4">Submit Registry</button>
                 </form>
             </div>
-            <button onClick={() => setView('landing')} className="mt-6 text-gray-400 font-medium text-sm hover:text-brand-black transition-colors">Cancel & Return</button>
+            <button onClick={() => setView('login')} className="mt-6 text-gray-400 font-medium text-sm hover:text-brand-black transition-colors">Cancel & Return</button>
         </div>
     );
 }

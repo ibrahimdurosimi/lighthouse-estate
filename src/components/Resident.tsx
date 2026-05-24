@@ -4,12 +4,12 @@ import { useApp } from '../lib/context';
 import ThemeToggle from './ThemeToggle';
 import { db, appId } from '../lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
-import { generateCode, formatDate, filterItemsByDate, hashPin } from '../lib/utils';
+import { generateCode, formatDate, filterItemsByDate, hashPin, generateOfflineCode } from '../lib/utils';
 import { EmailTriggers } from '../lib/email';
 import clsx from 'clsx';
 
 export default function Resident() {
-    const { profile, setProfile, setView, notify, isDarkMode } = useApp();
+    const { profile, setProfile, setView, notify, isDarkMode, lang, t } = useApp();
     const [viewTab, setViewTab] = useState<'dash' | 'auth' | 'hist' | 'bc' | 'staff' | 'dir' | 'svcs' | 'kids' | 'tickets' | 'polls'>('dash');
     const [menuOpen, setMenuOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState<'home' | 'security' | 'services'>('home');
@@ -49,6 +49,9 @@ export default function Resident() {
     const [showChangePin, setShowChangePin] = useState(false);
     const [showLS, setShowLS] = useState(false);
     const [showGatePass, setShowGatePass] = useState(false);
+    const [showGuestPass, setShowGuestPass] = useState(false);
+    const [guestName, setGuestName] = useState('');
+    const [guestTime, setGuestTime] = useState('');
     const [showAddStaff, setShowAddStaff] = useState(false);
     const [staffInvite, setStaffInvite] = useState<{name: string, code: string, role: string} | null>(null);
     const [reviewStaff, setReviewStaff] = useState<any>(null);
@@ -59,6 +62,17 @@ export default function Resident() {
     const [staffFn, setStaffFn] = useState('');
     const [staffRole, setStaffRole] = useState('');
     const [staffPhone, setStaffPhone] = useState('');
+    
+    // Staff Pass config
+    const [showStaffPassConfig, setShowStaffPassConfig] = useState(false);
+    const [selectedStaffUserId, setSelectedStaffUserId] = useState('');
+    const [staffPassDays, setStaffPassDays] = useState<string[]>([]);
+    const [staffClockIn, setStaffClockIn] = useState('');
+    const [staffClockOut, setStaffClockOut] = useState('');
+
+    // Offline Pass
+    const [showOfflinePass, setShowOfflinePass] = useState(false);
+    const [offlineCode, setOfflineCode] = useState('');
 
     useEffect(() => {
         if (!profile) return;
@@ -120,16 +134,19 @@ export default function Resident() {
     const activeCount = filteredCodes.filter(c => c.status === 'active').length;
     const historyCount = filteredCodes.filter(c => c.status === 'used' || c.status === 'checked-out').length;
 
-    const issueCode = async (type: string) => {
+    const issueCode = async (type: string, name?: string, expectedTime?: string) => {
         let durationMinutes = 60;
-        let targetName = 'Visitor';
-        let note = '';
-        if (type === 'Guest') durationMinutes = 30;
+        let targetName = name || (type === 'Delivery' ? 'Delivery' : 'Visitor');
+        let note = expectedTime ? `Expected at ${expectedTime}. ` : '';
+        if (type === 'Guest') {
+            durationMinutes = 30;
+            if (!name) targetName = 'Guest';
+        }
         else if (type === 'Delivery') durationMinutes = 15;
         else if (type === 'Jumat') {
             durationMinutes = 180; // 3 hours
             targetName = 'Jumat Guest';
-            note = `Has authorized guest to come pray Jumat service in the estate mosque.`;
+            note += `Has authorized guest to come pray Jumat service in the estate mosque.`;
         }
 
         const code = generateCode();
@@ -359,6 +376,27 @@ Thank you.`;
         setReviewStaff(null);
     };
 
+    const handleConfigStaffPass = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedStaffUserId) return notify("Select a staff member.", "error");
+        try {
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', selectedStaffUserId), {
+                scheduleDays: staffPassDays,
+                clockIn: staffClockIn,
+                clockOut: staffClockOut
+            });
+            setShowStaffPassConfig(false);
+            notify("Staff pass configured.");
+            setSelectedStaffUserId('');
+            setStaffPassDays([]);
+            setStaffClockIn('');
+            setStaffClockOut('');
+        } catch (err) {
+            console.error(err);
+            notify("Failed to configure staff pass.", "error");
+        }
+    };
+
     const handleRevokePass = async (id: string) => {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'codes', id), {
             status: 'used', // Setting to used so it clears from active list and prevents entry
@@ -472,9 +510,10 @@ Thank you.`;
     const dirStaffData = staffData.filter(x => x.employerId !== profile.identifier && x.status === 'approved' && (!searchQuery || x.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) || x.staffRole?.toLowerCase().includes(searchQuery.toLowerCase()) || x.employerId?.toLowerCase().includes(searchQuery.toLowerCase())));
 
     return (
-        <div className="max-w-xl mx-auto min-h-screen pb-24 animate-fade-in relative bg-stone-50/50 dark:bg-stone-950/50">
-            <header className="bg-white/90 dark:bg-stone-900/90 backdrop-blur border-b border-brand-gray dark:border-stone-800 px-5 py-4 mb-2 flex justify-between items-center sticky top-0 z-20">
-                <div className="flex items-center gap-3 w-full">
+        <div className="absolute inset-0 flex flex-col bg-stone-50/50 dark:bg-stone-950/50 transition-colors">
+            <div className="flex-1 overflow-y-auto no-scrollbar pb-24">
+                <header className="bg-white/90 dark:bg-stone-900/90 backdrop-blur border-b border-brand-gray dark:border-stone-800 px-5 py-4 mb-2 flex justify-between items-center sticky top-0 z-20">
+                    <div className="flex items-center gap-3 w-full">
                     <div className="bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100 w-11 h-11 rounded-full flex items-center justify-center font-bold text-lg">{profile.firstName[0]}</div>
                     <div className="flex flex-col flex-1">
                         <h2 className="font-bold text-gray-900 dark:text-gray-100 leading-tight">{profile.firstName} {profile.lastName}</h2>
@@ -487,7 +526,7 @@ Thank you.`;
                         <AlertTriangle className="w-5 h-5" />
                     </button>
                     <button onClick={() => setShowChangePin(true)} className="p-2 rounded-full bg-gray-50 dark:bg-stone-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-stone-700 transition-colors flex-shrink-0"><Settings className="w-5 h-5" /></button>
-                    <button onClick={() => { setProfile(null); setView('landing'); }} className="p-2 rounded-full bg-gray-50 dark:bg-stone-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 transition-colors flex-shrink-0"><LogOut className="w-5 h-5" /></button>
+                    <button onClick={() => { setProfile(null); setView('login'); }} className="p-2 rounded-full bg-gray-50 dark:bg-stone-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 transition-colors flex-shrink-0"><LogOut className="w-5 h-5" /></button>
                 </div>
             </header>
 
@@ -507,107 +546,7 @@ Thank you.`;
                 </div>
                 */}
 
-                {/* Vertical Categories Overview */}
-                {viewTab === 'dash' && (
-                    <div className="space-y-6 pt-2 animate-fade-in">
-                        {/* Section 1: Security & Access */}
-                        <div>
-                            <div className="flex justify-between items-center mb-3 px-1">
-                                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-stone-500">Security & Access</h3>
-                                <button onClick={() => setViewTab('hist')} className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">View Logs</button>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <button onClick={() => { setActiveCategory('security'); setViewTab('auth'); }} className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-start gap-3 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all group lg:flex-row lg:items-center">
-                                    <div className="bg-emerald-100 dark:bg-emerald-900/50 p-2.5 rounded-xl text-emerald-700 dark:text-emerald-400">
-                                        <UserPlus className="w-5 h-5" />
-                                    </div>
-                                    <div className="text-left">
-                                        <span className="text-[11px] font-black uppercase tracking-wide text-gray-900 dark:text-gray-100 block">Issue Pass</span>
-                                        <span className="text-[9px] font-bold text-gray-400 dark:text-stone-500 uppercase tracking-widest mt-0.5">Quick Verify</span>
-                                    </div>
-                                </button>
-                                <button onClick={handleTriggerSOS} className="bg-rose-50 dark:bg-rose-950/20 p-4 rounded-2xl border border-rose-100 dark:border-rose-900/30 shadow-sm flex flex-col items-start gap-3 transition-all hover:bg-rose-100 dark:hover:bg-rose-900/30 lg:flex-row lg:items-center">
-                                    <div className="bg-rose-500 p-2.5 rounded-xl text-white">
-                                        <Shield className="w-5 h-5" />
-                                    </div>
-                                    <div className="text-left">
-                                        <span className="text-[11px] font-bold uppercase tracking-wide text-rose-900 dark:text-rose-200 block">Estate SOS</span>
-                                        <span className="text-[9px] font-medium text-rose-700/60 dark:text-rose-500/60 uppercase tracking-widest mt-0.5">Emergency</span>
-                                    </div>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Section 2: Living & Community */}
-                        <div>
-                            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-stone-500 mb-3 px-1">Estate Living</h3>
-                            <div className="grid grid-cols-2 gap-3">
-                                <button onClick={() => { setActiveCategory('home'); setViewTab('bc'); }} className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-start gap-3 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all lg:flex-row lg:items-center">
-                                    <div className="bg-sky-100 dark:bg-sky-900/50 p-2.5 rounded-xl text-sky-700 dark:text-sky-400">
-                                        <Bell className="w-5 h-5" />
-                                    </div>
-                                    <div className="text-left">
-                                        <span className="text-[11px] font-black uppercase tracking-wide text-gray-900 dark:text-gray-100 block">Notices</span>
-                                        <span className="text-[9px] font-bold text-gray-400 dark:text-stone-500 uppercase tracking-widest mt-0.5">{noticesData.length} Recent</span>
-                                    </div>
-                                </button>
-                                <button onClick={() => { setActiveCategory('home'); setViewTab('polls'); }} className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-start gap-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all lg:flex-row lg:items-center">
-                                    <div className="bg-indigo-100 dark:bg-indigo-900/50 p-2.5 rounded-xl text-indigo-700 dark:text-indigo-400">
-                                        <MessageSquare className="w-5 h-5" />
-                                    </div>
-                                    <div className="text-left">
-                                        <span className="text-[11px] font-black uppercase tracking-wide text-gray-900 dark:text-gray-100 block">Townhall</span>
-                                        <span className="text-[9px] font-bold text-gray-400 dark:text-stone-500 uppercase tracking-widest mt-0.5">Polls</span>
-                                    </div>
-                                </button>
-                                <button onClick={() => { setActiveCategory('services'); setViewTab('tickets'); }} className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-start gap-3 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-all lg:flex-row lg:items-center">
-                                    <div className="bg-amber-100 dark:bg-amber-900/50 p-2.5 rounded-xl text-amber-700 dark:text-amber-400">
-                                        <Wrench className="w-5 h-5" />
-                                    </div>
-                                    <div className="text-left">
-                                        <span className="text-[11px] font-black uppercase tracking-wide text-gray-900 dark:text-gray-100 block">Fix-It</span>
-                                        <span className="text-[9px] font-bold text-gray-400 dark:text-stone-500 uppercase tracking-widest mt-0.5">Maintenance</span>
-                                    </div>
-                                </button>
-                                <button onClick={() => { setActiveCategory('services'); setViewTab('kids'); }} className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-start gap-3 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all lg:flex-row lg:items-center">
-                                    <div className="bg-emerald-100 dark:bg-emerald-900/50 p-2.5 rounded-xl text-emerald-700 dark:text-emerald-400">
-                                        <BookOpen className="w-5 h-5" />
-                                    </div>
-                                    <div className="text-left">
-                                        <span className="text-[11px] font-black uppercase tracking-wide text-gray-900 dark:text-gray-100 block">Madrasa</span>
-                                        <span className="text-[9px] font-bold text-gray-400 dark:text-stone-500 uppercase tracking-widest mt-0.5">Kids Portal</span>
-                                    </div>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Section 3: Staff & Market */}
-                        <div>
-                            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-stone-500 mb-3 px-1">Resources</h3>
-                            <div className="grid grid-cols-2 gap-3">
-                                <button onClick={() => { setActiveCategory('services'); setViewTab('staff'); }} className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-start gap-3 hover:bg-stone-100 dark:hover:bg-stone-800/40 transition-all lg:flex-row lg:items-center">
-                                    <div className="bg-stone-100 dark:bg-stone-800/80 p-2.5 rounded-xl text-stone-700 dark:text-stone-300">
-                                        <Users className="w-5 h-5" />
-                                    </div>
-                                    <div className="text-left">
-                                        <span className="text-[11px] font-bold uppercase tracking-wide text-brand-black dark:text-gray-200 block">My Staff</span>
-                                        <span className="text-[9px] font-medium text-gray-400 uppercase tracking-widest mt-0.5">Management</span>
-                                    </div>
-                                </button>
-                                <button onClick={() => { setActiveCategory('services'); setViewTab('svcs'); }} className="bg-white dark:bg-stone-900 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-start gap-3 hover:bg-stone-100 dark:hover:bg-stone-800/40 transition-all lg:flex-row lg:items-center">
-                                    <div className="bg-stone-100 dark:bg-stone-800/80 p-2.5 rounded-xl text-stone-700 dark:text-stone-300">
-                                        <ScanLine className="w-5 h-5" />
-                                    </div>
-                                    <div className="text-left">
-                                        <span className="text-[11px] font-bold uppercase tracking-wide text-brand-black dark:text-gray-200 block">Market</span>
-                                        <span className="text-[9px] font-medium text-gray-400 uppercase tracking-widest mt-0.5">Local Services</span>
-                                    </div>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
+                {/* Vertical Categories Overview REMOVED as per user request */}
                 {/* Header for non-dash tabs */}
                 {viewTab !== 'dash' && (
                     <div className="flex bg-gray-100/50 dark:bg-stone-800/50 p-1 rounded-2xl mb-3">
@@ -637,101 +576,82 @@ Thank you.`;
 
             <div className="space-y-6">
                 {viewTab === 'dash' && (
-                    <div className="space-y-6 animate-fade-in">
-                        {/* Quick Action Grid */}
-                        <div className="grid grid-cols-3 gap-3">
-                            <button onClick={() => { setActiveCategory('security'); setViewTab('auth'); }} className="bg-white dark:bg-stone-900 mb-0.5 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-center gap-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors group">
-                                <div className="bg-emerald-100 dark:bg-emerald-900/50 p-2.5 rounded-xl text-emerald-700 dark:text-emerald-400 group-hover:scale-110 transition-transform">
-                                    <UserPlus className="w-5 h-5" />
-                                </div>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">Visitor</span>
-                            </button>
-                            <button onClick={() => { setActiveCategory('services'); setViewTab('tickets'); setShowAddTicket(true); }} className="bg-white dark:bg-stone-900 mb-0.5 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-center gap-2 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors group">
-                                <div className="bg-amber-100 dark:bg-amber-900/50 p-2.5 rounded-xl text-amber-700 dark:text-amber-400 group-hover:scale-110 transition-transform">
-                                    <Wrench className="w-5 h-5" />
-                                </div>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">Fix It</span>
-                            </button>
-                            <button onClick={() => { setActiveCategory('home'); setViewTab('bc'); }} className="bg-white dark:bg-stone-900 mb-0.5 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-center gap-2 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors group">
-                                <div className="bg-sky-100 dark:bg-sky-900/50 p-2.5 rounded-xl text-sky-700 dark:text-sky-400 group-hover:scale-110 transition-transform">
-                                    <Bell className="w-5 h-5" />
-                                </div>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">Notices</span>
-                            </button>
-                        </div>
-
-                        {/* Recent Community Notice */}
-                        {noticesData.length > 0 && (
-                            <div className="bg-emerald-900 text-white rounded-[2rem] p-6 shadow-xl relative overflow-hidden">
-                                <div className="absolute -right-10 -top-10 bg-white/10 w-40 h-40 rounded-full blur-3xl"></div>
-                                <div className="flex items-center gap-2 mb-4">
-                                    <Bell className="w-4 h-4 text-emerald-300" />
-                                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-300">Latest Notice</span>
-                                </div>
-                                <h3 className="text-lg font-semibold mb-2 leading-tight">{noticesData.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))[0].title}</h3>
-                                <p className="text-xs text-emerald-50/80 leading-relaxed mb-4 line-clamp-2">{noticesData.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))[0].content}</p>
-                                <button onClick={() => setViewTab('bc')} className="text-[10px] font-black uppercase tracking-widest bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors">Read More</button>
-                            </div>
-                        )}
-
+                    <div className="space-y-6 animate-fade-in pl-1 pr-1">
                         {/* Stats Section */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="bg-white dark:bg-stone-900 p-5 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm transition-colors">
-                                <div className="flex justify-between items-start mb-4">
+                                <div className="flex justify-between items-start mb-2">
                                     <div className="bg-emerald-50 dark:bg-emerald-900/30 p-2 rounded-lg text-emerald-600 dark:text-emerald-400">
                                         <Clock className="w-4 h-4" />
                                     </div>
                                     <span className="text-2xl font-bold text-brand-black dark:text-gray-100">{activeCount}</span>
                                 </div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-stone-500">Active Visitor Passes</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-stone-500 mt-1">Active Visitor Passes</p>
                             </div>
                             <div className="bg-white dark:bg-stone-900 p-5 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm transition-colors">
-                                <div className="flex justify-between items-start mb-4">
+                                <div className="flex justify-between items-start mb-2">
                                     <div className="bg-amber-50 dark:bg-amber-900/30 p-2 rounded-lg text-amber-600 dark:text-amber-400">
                                         <AlertTriangle className="w-4 h-4" />
                                     </div>
                                     <span className="text-2xl font-bold text-brand-black dark:text-gray-100">{ticketsData.filter(t => t.status === 'pending').length}</span>
                                 </div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-stone-500">Open Tickets</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-stone-500 mt-1">Open Tickets</p>
                             </div>
                         </div>
 
-                        {/* Active Pass Preview Snippet */}
-                        {filteredCodes.filter(c => c.status === 'active').length > 0 && (
-                            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h4 className="text-[11px] font-black uppercase tracking-widest text-gray-500">Latest Active Pass</h4>
-                                    <button onClick={() => { setActiveCategory('security'); setViewTab('auth'); }} className="text-[10px] font-bold text-emerald-700">View All</button>
-                                </div>
-                                {filteredCodes.filter(c => c.status === 'active').sort((a,b) => b.createdAt?.seconds - a.createdAt?.seconds).slice(0, 1).map(c => (
-                                    <div key={c.id} className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="bg-emerald-50 w-10 h-10 rounded-xl flex items-center justify-center font-mono font-bold text-emerald-700">{c.code[0]}</div>
-                                            <div>
-                                                <p className="text-xs font-bold text-brand-black">{c.code}</p>
-                                                <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">{c.targetName}</p>
-                                            </div>
-                                        </div>
-                                        <button onClick={() => shareCode(c.id, 'cp')} className="p-2 text-gray-400 hover:text-emerald-700 transition-colors">
-                                            <Copy className="w-4 h-4" />
-                                        </button>
+                        {/* Quick Action Grid */}
+                        <div>
+                            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-stone-500 mb-3 px-1">Quick Actions</h3>
+                            <div className="grid grid-cols-3 gap-3">
+                                <button onClick={() => { setActiveCategory('security'); setViewTab('auth'); }} className="bg-white dark:bg-stone-900 mb-0.5 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-center gap-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors group">
+                                    <div className="bg-emerald-100 dark:bg-emerald-900/50 p-2.5 rounded-xl text-emerald-700 dark:text-emerald-400 group-hover:scale-110 transition-transform">
+                                        <UserPlus className="w-5 h-5" />
                                     </div>
-                                ))}
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">Visitors</span>
+                                </button>
+                                <button onClick={() => { setActiveCategory('services'); setViewTab('tickets'); setShowAddTicket(true); }} className="bg-white dark:bg-stone-900 mb-0.5 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-center gap-2 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors group">
+                                    <div className="bg-amber-100 dark:bg-amber-900/50 p-2.5 rounded-xl text-amber-700 dark:text-amber-400 group-hover:scale-110 transition-transform">
+                                        <Wrench className="w-5 h-5" />
+                                    </div>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">Fix It</span>
+                                </button>
+                                <button onClick={() => { setActiveCategory('home'); setViewTab('bc'); }} className="bg-white dark:bg-stone-900 mb-0.5 p-4 rounded-2xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col items-center gap-2 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors group">
+                                    <div className="bg-sky-100 dark:bg-sky-900/50 p-2.5 rounded-xl text-sky-700 dark:text-sky-400 group-hover:scale-110 transition-transform">
+                                        <Bell className="w-5 h-5" />
+                                    </div>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">Notices</span>
+                                </button>
                             </div>
-                        )}
-                        
-                        {!isSosActive && (
-                            <div className="bg-rose-50 border border-rose-100 rounded-2xl p-5 flex items-center gap-4">
-                                <div className="bg-white p-3 rounded-xl text-rose-500 shadow-sm">
-                                    <AlertTriangle className="w-6 h-6" />
-                                </div>
-                                <div className="flex-1">
-                                    <h4 className="text-xs font-bold text-rose-900 uppercase tracking-tight">Security SOS</h4>
-                                    <p className="text-[10px] text-rose-800/70 font-medium">In case of emergency, trigger the silent alarm.</p>
-                                </div>
-                                <button onClick={handleTriggerSOS} className="bg-rose-500 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-500/30 active:scale-95 transition-all">Trigger</button>
+                        </div>
+
+                        {/* Latest Notices ListView */}
+                        <div className="pt-2">
+                            <div className="flex justify-between items-center mb-4 px-1">
+                                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-stone-500">Latest Notices</h3>
+                                <button onClick={() => { setActiveCategory('home'); setViewTab('bc'); }} className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">View All</button>
                             </div>
-                        )}
+                            {noticesData.length > 0 ? (
+                                <div className="space-y-3">
+                                    {noticesData.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).slice(0, 5).map(n => (
+                                        <div key={n.id} className="bg-white dark:bg-stone-900 p-4 rounded-xl border border-gray-100 dark:border-stone-800 shadow-sm flex flex-col gap-2 relative overflow-hidden group">
+                                            {n.category === 'emergency' && <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>}
+                                            {n.category === 'event' && <div className="absolute top-0 left-0 w-1 h-full bg-sky-500"></div>}
+                                            {n.category === 'info' && <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>}
+                                            <div className="flex justify-between items-start gap-4">
+                                                <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{n.title}</h4>
+                                                <span className="text-[9px] whitespace-nowrap text-gray-400 dark:text-stone-500 uppercase tracking-wider font-medium">{formatDate(n.createdAt)}</span>
+                                            </div>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed">{n.content}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="bg-white dark:bg-stone-900 border border-gray-100 dark:border-stone-800 rounded-xl p-8 text-center">
+                                    <Bell className="w-8 h-8 text-gray-200 dark:text-stone-700 mx-auto mb-3" />
+                                    <p className="text-gray-400 dark:text-stone-500 text-sm font-medium">No recent notices given</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
                 {viewTab === 'polls' && (
@@ -789,29 +709,44 @@ Thank you.`;
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3 mb-6">
-                            <button onClick={() => issueCode('Guest')} className="bg-white hover:bg-emerald-50 text-emerald-900 p-4 rounded-xl border border-emerald-100 shadow-sm transition-all flex flex-col items-center gap-2 group">
-                                <span className="bg-emerald-100 p-2.5 rounded-full group-hover:bg-emerald-200 transition-colors">
-                                    <Clock className="w-5 h-5 text-emerald-700" />
+                            <button onClick={() => setShowGuestPass(true)} className="bg-white dark:bg-stone-900 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-900 dark:text-emerald-400 p-4 rounded-xl border border-emerald-100 dark:border-emerald-900/50 shadow-sm transition-all flex flex-col items-center gap-2 group">
+                                <span className="bg-emerald-100 dark:bg-emerald-900/50 p-2.5 rounded-full group-hover:bg-emerald-200 dark:group-hover:bg-emerald-900/80 transition-colors">
+                                    <Clock className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
                                 </span>
-                                <span className="font-semibold text-xs tracking-wide">Guest</span>
+                                <span className="font-semibold text-xs tracking-wide">Guest Pass</span>
                             </button>
-                            <button onClick={() => issueCode('Delivery')} className="bg-white hover:bg-teal-50 text-teal-900 p-4 rounded-xl border border-teal-100 shadow-sm transition-all flex flex-col items-center gap-2 group">
-                                <span className="bg-teal-100 p-2.5 rounded-full group-hover:bg-teal-200 transition-colors">
-                                    <Truck className="w-5 h-5 text-teal-700" />
+                            <button onClick={() => issueCode('Delivery')} className="bg-white dark:bg-stone-900 hover:bg-teal-50 dark:hover:bg-teal-900/20 text-teal-900 dark:text-teal-400 p-4 rounded-xl border border-teal-100 dark:border-teal-900/50 shadow-sm transition-all flex flex-col items-center gap-2 group">
+                                <span className="bg-teal-100 dark:bg-teal-900/50 p-2.5 rounded-full group-hover:bg-teal-200 dark:group-hover:bg-teal-900/80 transition-colors">
+                                    <Truck className="w-5 h-5 text-teal-700 dark:text-teal-400" />
                                 </span>
                                 <span className="font-semibold text-xs tracking-wide">Delivery</span>
                             </button>
-                            <button onClick={() => setShowLS(true)} className="bg-white hover:bg-stone-50 text-stone-700 p-4 rounded-xl border border-stone-200 shadow-sm transition-all flex flex-col items-center gap-2 group">
-                                <span className="bg-stone-100 p-2.5 rounded-full group-hover:bg-stone-200 transition-colors">
-                                    <Calendar className="w-5 h-5 text-stone-600" />
+                            <button onClick={() => setShowLS(true)} className="bg-white dark:bg-stone-900 hover:bg-stone-50 dark:hover:bg-stone-800 p-4 rounded-xl border border-stone-200 dark:border-stone-700 shadow-sm transition-all flex flex-col items-center gap-2 group">
+                                <span className="bg-stone-100 dark:bg-stone-800 p-2.5 rounded-full group-hover:bg-stone-200 dark:group-hover:bg-stone-700 transition-colors">
+                                    <Calendar className="w-5 h-5 text-stone-600 dark:text-stone-400" />
                                 </span>
                                 <span className="font-semibold text-xs tracking-wide">Long-Stay</span>
                             </button>
-                            <button onClick={() => setShowGatePass(true)} className="bg-white hover:bg-rose-50 text-rose-700 p-4 rounded-xl border border-rose-100 shadow-sm transition-all flex flex-col items-center gap-2 group">
-                                <span className="bg-rose-100 p-2.5 rounded-full group-hover:bg-rose-200 transition-colors">
-                                    <LogOut className="w-5 h-5 text-rose-600" />
+                            <button onClick={() => setShowGatePass(true)} className="bg-white dark:bg-stone-900 hover:bg-rose-50 dark:hover:bg-rose-900/20 text-rose-700 dark:text-rose-400 p-4 rounded-xl border border-rose-100 dark:border-rose-900/50 shadow-sm transition-all flex flex-col items-center gap-2 group">
+                                <span className="bg-rose-100 dark:bg-rose-900/50 p-2.5 rounded-full group-hover:bg-rose-200 dark:group-hover:bg-rose-900/80 transition-colors">
+                                    <LogOut className="w-5 h-5 text-rose-600 dark:text-rose-400" />
                                 </span>
                                 <span className="font-semibold text-xs tracking-wide">Exit Pass</span>
+                            </button>
+                            <button onClick={() => setShowStaffPassConfig(true)} className="bg-white dark:bg-stone-900 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50 shadow-sm transition-all flex flex-col items-center gap-2 group">
+                                <span className="bg-indigo-100 dark:bg-indigo-900/50 p-2.5 rounded-full group-hover:bg-indigo-200 dark:group-hover:bg-indigo-900/80 transition-colors">
+                                    <Users className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                                </span>
+                                <span className="font-semibold text-xs tracking-wide">Staff Pass</span>
+                            </button>
+                            <button onClick={() => {
+                                setOfflineCode(generateOfflineCode(profile.identifier));
+                                setShowOfflinePass(true);
+                            }} className="bg-white dark:bg-stone-900 hover:bg-purple-50 dark:hover:bg-purple-900/20 text-purple-700 dark:text-purple-400 p-4 rounded-xl border border-purple-100 dark:border-purple-900/50 shadow-sm transition-all flex flex-col items-center gap-2 group">
+                                <span className="bg-purple-100 dark:bg-purple-900/50 p-2.5 rounded-full group-hover:bg-purple-200 dark:group-hover:bg-purple-900/80 transition-colors">
+                                    <Clock className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                                </span>
+                                <span className="font-semibold text-xs tracking-wide">Offline Pass</span>
                             </button>
                             <button onClick={() => issueCode('Jumat')} className="bg-emerald-600 text-white p-4 rounded-xl shadow-md transition-all flex flex-col items-center justify-center gap-1 hover:bg-emerald-700 col-span-2">
                                 <span className="font-semibold text-sm tracking-wide text-center">Jumat Guest Pass (3hrs)</span>
@@ -1137,6 +1072,43 @@ Thank you.`;
                 </div>
             )}
 
+            {showOfflinePass && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-white dark:bg-stone-900 border border-transparent dark:border-stone-800 w-full max-w-sm p-8 rounded-[2rem] shadow-2xl text-center space-y-6">
+                        <div className="bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400 w-20 h-20 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                            <Clock className="w-10 h-10" />
+                        </div>
+                        <div>
+                            <h2 className="text-3xl font-black text-brand-black dark:text-gray-100 uppercase tracking-tight mb-2">Offline Pass</h2>
+                            <p className="text-gray-500 dark:text-stone-400 text-sm font-medium">This code is valid for today. Security will verify it mathematically offline.</p>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-stone-800 p-6 rounded-2xl border border-gray-100 dark:border-stone-700">
+                            <p className="text-5xl font-mono font-black text-brand-black dark:text-gray-100 tracking-[0.2em]">{offlineCode}</p>
+                        </div>
+                        <button onClick={() => setShowOfflinePass(false)} className="w-full bg-brand-black dark:bg-stone-700 text-white dark:text-gray-200 rounded-xl py-4 font-semibold text-sm shadow-md hover:bg-black dark:hover:bg-stone-600 active:scale-95 transition-all uppercase tracking-wide">Close</button>
+                    </div>
+                </div>
+            )}
+
+            {showGuestPass && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-white dark:bg-stone-900 border border-transparent dark:border-stone-800 w-full max-w-sm p-6 rounded-2xl shadow-xl space-y-4">
+                        <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl p-3 mb-2 text-center shadow-sm text-emerald-800 dark:text-emerald-300">
+                            <h3 className="text-sm font-semibold tracking-wide uppercase">Guest Pass</h3>
+                        </div>
+                        <input className="w-full p-3 rounded-lg border border-gray-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-stone-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm" placeholder="Guest Name (Optional)" value={guestName} onChange={e=>setGuestName(e.target.value)} />
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 dark:text-stone-400 uppercase tracking-widest block pl-1 mb-1">Expected Time (Optional)</label>
+                            <input type="time" className="w-full p-3 rounded-lg border border-gray-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-sm" value={guestTime} onChange={e=>setGuestTime(e.target.value)} />
+                        </div>
+                        <div className="flex gap-3 pt-4 border-t border-gray-100 dark:border-stone-800">
+                            <button onClick={()=>setShowGuestPass(false)} className="flex-1 font-semibold text-gray-500 dark:text-stone-400 uppercase text-[11px] hover:bg-gray-50 dark:hover:bg-stone-800 rounded-xl transition-colors">Cancel</button>
+                            <button onClick={() => { setShowGuestPass(false); issueCode('Guest', guestName, guestTime); setGuestName(''); setGuestTime(''); }} className="flex-[2] bg-emerald-600 text-white rounded-xl py-3 font-semibold text-xs shadow-sm uppercase hover:bg-emerald-700 transition-colors">Generate Pass</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {showLS && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4 animate-fade-in">
                     <div className="bg-white w-full max-w-sm p-6 rounded-2xl shadow-xl space-y-4">
@@ -1171,23 +1143,62 @@ Thank you.`;
 
             {showAddStaff && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4 animate-fade-in">
-                    <div className="bg-white w-full max-w-sm p-6 rounded-2xl shadow-xl space-y-4">
-                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-2 text-center shadow-sm text-blue-800">
+                    <div className="bg-white dark:bg-stone-900 border border-transparent dark:border-stone-800 w-full max-w-sm p-6 rounded-2xl shadow-xl space-y-4">
+                        <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 rounded-xl p-3 mb-2 text-center shadow-sm text-blue-800 dark:text-blue-300">
                             <h3 className="text-sm font-semibold tracking-wide uppercase">Assign Staff</h3>
                         </div>
-                        <input className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:outline-none text-sm" placeholder="Staff Full Name" value={staffFn} onChange={e=>setStaffFn(e.target.value)} />
-                        <input className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:outline-none text-sm" placeholder="Role (e.g. Driver, Chef)" value={staffRole} onChange={e=>setStaffRole(e.target.value)} />
-                        <input className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:outline-none text-sm font-mono" inputMode="numeric" placeholder="Phone Number" value={staffPhone} onChange={e=>setStaffPhone(e.target.value)} />
+                        <input className="w-full p-3 rounded-lg border border-gray-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-stone-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none text-sm" placeholder="Staff Full Name" value={staffFn} onChange={e=>setStaffFn(e.target.value)} />
+                        <input className="w-full p-3 rounded-lg border border-gray-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-stone-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none text-sm" placeholder="Role (e.g. Driver, Chef)" value={staffRole} onChange={e=>setStaffRole(e.target.value)} />
+                        <input className="w-full p-3 rounded-lg border border-gray-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-stone-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none text-sm font-mono" inputMode="numeric" placeholder="Phone Number" value={staffPhone} onChange={e=>setStaffPhone(e.target.value)} />
                         
-                        <div className="bg-stone-50 rounded-xl border border-stone-200 p-4 text-[11px] text-stone-600 font-medium leading-relaxed">
+                        <div className="bg-stone-50 dark:bg-stone-800/50 rounded-xl border border-stone-200 dark:border-stone-700 p-4 text-[11px] text-stone-600 dark:text-stone-400 font-medium leading-relaxed">
                             Upon creating, a unique Invite Code will be generated. The staff member must use this code to register and complete their profile for your approval.
                         </div>
 
-                        <div className="flex gap-3 pt-4 border-t border-gray-100">
-                            <button onClick={()=>setShowAddStaff(false)} className="flex-1 font-semibold text-gray-500 uppercase text-[11px] hover:bg-gray-50 rounded-xl transition-colors">Cancel</button>
+                        <div className="flex gap-3 pt-4 border-t border-gray-100 dark:border-stone-800">
+                            <button onClick={()=>setShowAddStaff(false)} className="flex-1 font-semibold text-gray-500 dark:text-stone-400 uppercase text-[11px] hover:bg-gray-50 dark:hover:bg-stone-800 rounded-xl transition-colors">Cancel</button>
                             <button onClick={handleAddStaff} className="flex-[2] bg-blue-700 text-white rounded-xl py-3 font-semibold text-xs shadow-sm uppercase hover:bg-blue-800 transition-colors">Generate Invite</button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {showStaffPassConfig && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4 animate-fade-in">
+                    <form onSubmit={handleConfigStaffPass} className="bg-white dark:bg-stone-900 border border-transparent dark:border-stone-800 w-full max-w-sm p-6 rounded-2xl shadow-xl space-y-4">
+                        <div className="bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800/50 rounded-xl p-3 mb-2 text-center shadow-sm text-indigo-800 dark:text-indigo-300">
+                            <h3 className="text-sm font-semibold tracking-wide uppercase">Staff Pass config</h3>
+                        </div>
+                        <select className="w-full p-3 rounded-lg border border-gray-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none text-sm" value={selectedStaffUserId} onChange={e=>setSelectedStaffUserId(e.target.value)} required>
+                            <option value="" disabled>Select Staff Member</option>
+                            {myStaffData.map(s => <option key={s.id} value={s.id}>{s.firstName} ({s.staffRole})</option>)}
+                        </select>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-gray-500 dark:text-stone-400 uppercase tracking-widest block pl-1">Expected Days</label>
+                            <div className="flex flex-wrap gap-2">
+                                {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(day => (
+                                    <button type="button" key={day} onClick={() => setStaffPassDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day])} className={clsx("px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors", staffPassDays.includes(day) ? "bg-indigo-100 border-indigo-300 dark:bg-indigo-900/50 dark:border-indigo-700 text-indigo-800 dark:text-indigo-300" : "bg-gray-50 border-gray-200 dark:bg-stone-800 dark:border-stone-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-stone-700")}>
+                                        {day}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 dark:text-stone-400 uppercase tracking-widest block pl-1 mb-1">Clock In</label>
+                                <input type="time" className="w-full p-3 rounded-lg border border-gray-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none text-sm" value={staffClockIn} onChange={e=>setStaffClockIn(e.target.value)} required />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 dark:text-stone-400 uppercase tracking-widest block pl-1 mb-1">Clock Out</label>
+                                <input type="time" className="w-full p-3 rounded-lg border border-gray-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none text-sm" value={staffClockOut} onChange={e=>setStaffClockOut(e.target.value)} required />
+                            </div>
+                        </div>
+                        
+                        <div className="flex gap-3 pt-4 border-t border-gray-100 dark:border-stone-800">
+                            <button type="button" onClick={()=>setShowStaffPassConfig(false)} className="flex-1 font-semibold text-gray-500 dark:text-stone-400 uppercase text-[11px] hover:bg-gray-50 dark:hover:bg-stone-800 rounded-xl transition-colors">Cancel</button>
+                            <button type="submit" className="flex-[2] bg-indigo-700 text-white rounded-xl py-3 font-semibold text-xs shadow-sm uppercase hover:bg-indigo-800 transition-colors">Save Schedule</button>
+                        </div>
+                    </form>
                 </div>
             )}
 
@@ -1361,16 +1372,17 @@ Thank you.`;
                     </div>
                 </div>
             )}
+            </div>
 
             {/* iOS Style Bottom Navigation */}
-            <div className="fixed sm:absolute bottom-0 left-0 w-full bg-white/90 dark:bg-stone-900/90 backdrop-blur-md border-t border-gray-100 dark:border-stone-800 flex items-center justify-around pb-6 pt-3 px-2 z-40 transition-colors">
+            <div className="absolute bottom-0 w-full bg-white/90 dark:bg-stone-900/90 backdrop-blur-md border-t border-gray-100 dark:border-stone-800 flex items-center justify-around pb-6 pt-3 px-2 z-40 transition-colors">
                 <button onClick={() => setViewTab('dash')} className={`flex flex-col items-center gap-1 p-2 ${viewTab === 'dash' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-stone-500'}`}>
                     <Home className="w-6 h-6" />
-                    <span className="text-[10px] h-[12px] font-bold">Home</span>
+                    <span className="text-[10px] h-[12px] font-bold">{t('home')}</span>
                 </button>
                 <button onClick={() => setViewTab('auth')} className={`flex flex-col items-center gap-1 p-2 ${viewTab === 'auth' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-stone-500'}`}>
                     <UserPlus className="w-6 h-6" />
-                    <span className="text-[10px] h-[12px] font-bold">Pass</span>
+                    <span className="text-[10px] h-[12px] font-bold">{t('pass')}</span>
                 </button>
                 <div className="-mt-8">
                     <button onClick={handleTriggerSOS} className="bg-red-500 hover:bg-red-600 text-white p-4 rounded-full shadow-lg shadow-red-500/30 transform transition-transform active:scale-95 border-4 border-stone-100 dark:border-stone-950">
@@ -1379,11 +1391,11 @@ Thank you.`;
                 </div>
                 <button onClick={() => setViewTab('bc')} className={`flex flex-col items-center gap-1 p-2 ${viewTab === 'bc' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-stone-500'}`}>
                     <Bell className="w-6 h-6" />
-                    <span className="text-[10px] h-[12px] font-bold">Notices</span>
+                    <span className="text-[10px] h-[12px] font-bold">{t('notices')}</span>
                 </button>
                 <button onClick={() => setMenuOpen(true)} className={`flex flex-col items-center gap-1 p-2 text-gray-400 dark:text-stone-500 hover:text-gray-600 dark:hover:text-stone-400`}>
                     <Menu className="w-6 h-6" />
-                    <span className="text-[10px] h-[12px] font-bold">Menu</span>
+                    <span className="text-[10px] h-[12px] font-bold">{t('menu')}</span>
                 </button>
             </div>
 
@@ -1391,31 +1403,31 @@ Thank you.`;
             {menuOpen && (
                 <div className="fixed inset-0 z-[300] flex">
                     <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={() => setMenuOpen(false)}></div>
-                    <div className="relative w-64 bg-white dark:bg-stone-900 border-r border-gray-100 dark:border-stone-800 h-full flex flex-col shadow-2xl transition-transform duration-300 animate-slide-in-left">
+                    <div className={"relative w-64 bg-white dark:bg-stone-900 border-x border-gray-100 dark:border-stone-800 h-full flex flex-col shadow-2xl transition-transform duration-300 " + (lang === 'ar' ? 'animate-slide-in-right left-auto right-0' : 'animate-slide-in-left')}>
                         <div className="p-5 border-b border-gray-100 dark:border-stone-800 flex justify-between items-center bg-gray-50/50 dark:bg-stone-800/50">
-                            <span className="font-bold text-gray-900 dark:text-gray-100">Menu</span>
+                            <span className="font-bold text-gray-900 dark:text-gray-100">{t('menu')}</span>
                             <button onClick={() => setMenuOpen(false)} className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-stone-300 transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
                         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
                             <button onClick={() => { setViewTab('tickets'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${viewTab === 'tickets' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
-                                <Wrench className="w-5 h-5" /> <span className="font-semibold text-sm">Tickets & Fix-It</span>
+                                <Wrench className="w-5 h-5" /> <span className="font-semibold text-sm">{t('tickets')}</span>
                             </button>
                             <button onClick={() => { setViewTab('kids'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${viewTab === 'kids' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
-                                <BookOpen className="w-5 h-5" /> <span className="font-semibold text-sm">Madrasa Portal</span>
+                                <BookOpen className="w-5 h-5" /> <span className="font-semibold text-sm">{t('madrasa')}</span>
                             </button>
                             <button onClick={() => { setViewTab('staff'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${viewTab === 'staff' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
-                                <Users className="w-5 h-5" /> <span className="font-semibold text-sm">My Staff</span>
+                                <Users className="w-5 h-5" /> <span className="font-semibold text-sm">{t('my_staff')}</span>
                             </button>
                             <button onClick={() => { setViewTab('polls'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${viewTab === 'polls' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
-                                <MessageSquare className="w-5 h-5" /> <span className="font-semibold text-sm">Townhall</span>
+                                <MessageSquare className="w-5 h-5" /> <span className="font-semibold text-sm">{t('townhall')}</span>
                             </button>
                             <button onClick={() => { setViewTab('svcs'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${viewTab === 'svcs' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
-                                <ScanLine className="w-5 h-5" /> <span className="font-semibold text-sm">Marketplace</span>
+                                <ScanLine className="w-5 h-5" /> <span className="font-semibold text-sm">{t('marketplace')}</span>
                             </button>
                             <button onClick={() => { setViewTab('hist'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${viewTab === 'hist' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
-                                <Clock className="w-5 h-5" /> <span className="font-semibold text-sm">Activity Logs</span>
+                                <Clock className="w-5 h-5" /> <span className="font-semibold text-sm">{t('activity_logs')}</span>
                             </button>
                         </div>
                     </div>

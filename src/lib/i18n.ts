@@ -1,0 +1,70 @@
+export const translations = {
+    en: {
+        welcome: "Salam Alaykum",
+        resident_portal: "Resident Portal",
+        security_portal: "Security Portal",
+        admin_portal: "Admin Portal",
+        madrasa_portal: "Madrasa Portal",
+        residence: "Residence",
+        unit: "Unit",
+        select_house: "Select House",
+        security_pin: "Security PIN",
+        authenticate: "Authenticate",
+        new_unit: "New Unit Registration →",
+        portal: "Portal",
+        home: "Home",
+        pass: "Pass",
+        notices: "Notices",
+        menu: "Menu",
+        stats: "Stats",
+        users: "Users",
+        news: "News",
+        ledger: "Ledger",
+        dues: "Estate Dues",
+        tickets: "Tickets & Fix-It",
+        townhall: "Townhall",
+        madrasa: "Madrasa",
+        my_staff: "My Staff",
+        marketplace: "Marketplace",
+        activity_logs: "Activity Logs",
+        admin_menu: "Admin Menu",
+        language: "Language"
+    },
+    ar: {
+        welcome: "السلام عليكم",
+        resident_portal: "بوابة المقيمين",
+        security_portal: "بوابة الأمن",
+        admin_portal: "بوابة الإدارة",
+        madrasa_portal: "بوابة المدرسة",
+        residence: "مقر السكن",
+        unit: "الوحدة",
+        select_house: "اختر المنزل",
+        security_pin: "الرقم السري",
+        authenticate: "تسجيل الدخول",
+        new_unit: "تسجيل وحدة جديدة ←",
+        portal: "بوابة",
+        home: "الرئيسية",
+        pass: "المرور",
+        notices: "إشعارات",
+        menu: "القائمة",
+        stats: "إحصائيات",
+        users: "المستخدمين",
+        news: "الأخبار",
+        ledger: "السجلات",
+        dues: "مستحقات",
+        tickets: "التذاكر",
+        townhall: "المنتدى",
+        madrasa: "المدرسة",
+        my_staff: "طاقم العمل",
+        marketplace: "السوق",
+        activity_logs: "أنشطة",
+        admin_menu: "قائمة الإدارة",
+        language: "اللغة"
+    }
+};
+
+export type Lang = 'en' | 'ar';
+
+export function getTranslation(lang: Lang, key: keyof typeof translations['en']): string {
+    return translations[lang][key] || translations['en'][key] || key;
+}

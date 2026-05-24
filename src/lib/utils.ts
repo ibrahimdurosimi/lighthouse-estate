@@ -14,7 +14,7 @@ export async function hashPin(pin: string) {
 }
 
 export const generateCode = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; 
+    const chars = '0123456789'; 
     let res = '';
     for(let i=0; i<6; i++) res += chars.charAt(Math.floor(Math.random() * chars.length));
     return res;
@@ -24,6 +24,26 @@ export const formatDate = (date: any) => {
     if (!date) return "N/A";
     const d = date.toDate ? date.toDate() : new Date(date);
     return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+};
+
+export const generateOfflineCode = (house: string) => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+    const raw = `${house}-${dateStr}-LIGHTHOUSE-OFFLINE`;
+    
+    let hash = 0;
+    for (let i = 0; i < raw.length; i++) {
+        hash = ((hash << 5) - hash) + raw.charCodeAt(i);
+        hash = hash & hash; 
+    }
+    let res = Math.abs(hash).toString();
+    while (res.length < 6) {
+        res = res + res;
+    }
+    return res.substring(0, 6);
 };
 
 export const filterItemsByDate = (items: any[], dateField: string, filterType: string) => {

@@ -89,7 +89,7 @@ export default function MadrasaAdmin() {
 
     const handleLogout = () => {
         setProfile(null);
-        setView('landing');
+        setView('login');
     };
 
     const shareCode = (id: string, mode: 'wa' | 'cp') => {

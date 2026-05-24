@@ -3,7 +3,8 @@ import { LogOut, XCircle, AlertTriangle, Lock } from 'lucide-react';
 import { useApp } from '../lib/context';
 import ThemeToggle from './ThemeToggle';
 import { db, appId } from '../lib/firebase';
-import { collection, getDocs, updateDoc, doc, serverTimestamp, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, serverTimestamp, onSnapshot, query, where, addDoc } from 'firebase/firestore';
+import { generateOfflineCode, HOUSES } from '../lib/utils';
 import clsx from 'clsx';
 
 export default function Security() {
@@ -33,6 +34,51 @@ export default function Security() {
         const upperVal = val.toUpperCase();
         
         try {
+            // First check if it's an offline code
+            let offlineMatch = null;
+            for (const h of HOUSES) {
+                if (generateOfflineCode(h) === upperVal) {
+                    offlineMatch = h;
+                    break;
+                }
+            }
+
+            if (offlineMatch) {
+                setResult({ 
+                    status: 'verified', 
+                    data: { 
+                        code: upperVal, 
+                        houseId: offlineMatch, 
+                        targetName: "Offline Guest", 
+                        type: "Offline Daily", 
+                        status: "active" 
+                    } 
+                });
+                
+                // Still log it in cloud if there's internet
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'codes'), {
+                        appId,
+                        houseId: offlineMatch,
+                        code: upperVal,
+                        targetName: "Offline Guest",
+                        type: "Offline Daily",
+                        note: "Mathematically verified offline daily code",
+                        status: "used",
+                        createdAt: serverTimestamp(),
+                        usedAt: serverTimestamp(),
+                        validatedBy: profile?.identifier
+                    });
+                } catch(e) {} // ignore if offline
+
+                setTimeout(() => {
+                    setResult(null);
+                    setCodeInput('');
+                }, 4000);
+                return;
+            }
+
+            // Normal Cloud Check
             const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'codes'));
             const codes = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
             const found: any = codes.find((c: any) => c.code === upperVal);
@@ -105,7 +151,7 @@ export default function Security() {
                 </div>
                 <div className="flex gap-2 items-center">
                     <ThemeToggle />
-                    <button onClick={() => { setProfile(null); setView('landing'); }} className="p-2.5 rounded-xl bg-white dark:bg-stone-900 text-gray-600 dark:text-stone-400 border border-gray-200 dark:border-stone-800 shadow-sm hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 transition-colors">
+                    <button onClick={() => { setProfile(null); setView('login'); }} className="p-2.5 rounded-xl bg-white dark:bg-stone-900 text-gray-600 dark:text-stone-400 border border-gray-200 dark:border-stone-800 shadow-sm hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 transition-colors">
                         <LogOut className="w-4 h-4" />
                     </button>
                 </div>
@@ -133,12 +179,20 @@ export default function Security() {
                             <label className="text-[11px] font-semibold uppercase text-gray-500 tracking-widest block mb-4">Enter Access Code</label>
                             <input 
                                 value={codeInput}
-                                onChange={e => setCodeInput(e.target.value)}
-                                maxLength={6} 
+                                readOnly
                                 className="w-full py-8 rounded-3xl bg-white dark:bg-stone-800 border border-gray-200 dark:border-stone-700 text-5xl font-mono text-center shadow-sm uppercase placeholder:text-gray-200 dark:placeholder:text-stone-700 text-stone-800 dark:text-gray-100 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-bold" 
                                 placeholder="------" 
-                                autoFocus
                             />
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto mt-6">
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                                <button key={num} onClick={() => setCodeInput(prev => (prev.length < 6 ? prev + num : prev))} className="bg-white dark:bg-stone-800 py-6 rounded-2xl text-3xl font-bold font-mono shadow-sm active:scale-95 transition-transform text-stone-800 dark:text-gray-100 border border-gray-100 dark:border-stone-700">
+                                    {num}
+                                </button>
+                            ))}
+                            <button onClick={() => setCodeInput('')} className="bg-rose-50 dark:bg-rose-900/20 py-6 rounded-2xl text-lg font-bold font-sans uppercase shadow-sm active:scale-95 transition-transform text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/50">CLR</button>
+                            <button onClick={() => setCodeInput(prev => (prev.length < 6 ? prev + '0' : prev))} className="bg-white dark:bg-stone-800 py-6 rounded-2xl text-3xl font-bold font-mono shadow-sm active:scale-95 transition-transform text-stone-800 dark:text-gray-100 border border-gray-100 dark:border-stone-700">0</button>
+                            <button onClick={() => setCodeInput(prev => prev.slice(0, -1))} className="bg-stone-100 dark:bg-stone-700 py-6 rounded-2xl text-2xl font-bold shadow-sm active:scale-95 transition-transform text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-600">⌫</button>
                         </div>
                     </div>
                 ) : (
