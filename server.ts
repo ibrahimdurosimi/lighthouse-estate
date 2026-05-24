@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -41,6 +42,22 @@ async function startServer() {
     
     console.log(`[Email Request] To: ${to}, Subject: ${subject}`);
     
+    if (process.env.RESEND_API_KEY) {
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      try {
+        const data = await resend.emails.send({
+          from: 'Estate Magic <onboarding@resend.dev>',
+          to: [to],
+          subject: subject,
+          html: html || `<p>${body}</p>`
+        });
+        return res.json({ success: true, data });
+      } catch (error: any) {
+        console.error('Resend error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to send email via Resend' });
+      }
+    }
+
     const mailTransporter = getTransporter();
     
     if (!mailTransporter) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Eye, EyeOff } from 'lucide-react';
+import { LogOut, Eye, EyeOff, Menu, Home, Users, Bell, X, Wrench, MessageSquare, BookOpen, Clock, Activity, Building, CircleDollarSign, PlusCircle } from 'lucide-react';
 import { useApp } from '../lib/context';
 import ThemeToggle from './ThemeToggle';
 import { db, appId } from '../lib/firebase';
@@ -13,6 +13,7 @@ import { startOfDay, startOfWeek, startOfMonth, format, eachDayOfInterval, eachH
 export default function Admin() {
     const { profile, setView, setProfile, notify, isDarkMode } = useApp();
     const [admTab, setAdmTab] = useState<'analytics' | 'directory' | 'ledger' | 'notices' | 'tickets' | 'polls' | 'dues'>('analytics');
+    const [menuOpen, setMenuOpen] = useState(false);
     const [admFilter, setAdmFilter] = useState('all');
     
     const [usersData, setUsersData] = useState<any[]>([]);
@@ -112,13 +113,22 @@ export default function Admin() {
     const [amLn, setAmLn] = useState('');
     const [amId, setAmId] = useState('');
     const [amRole, setAmRole] = useState('security');
+    const [amEmail, setAmEmail] = useState('');
     const [amPin, setAmPin] = useState('');
     const [showAmPin, setShowAmPin] = useState(false);
     
     const handleAddAdmin = async () => {
-        if (!amFn || (amRole !== 'madrasa' && amPin.trim().length !== 6)) return alert("Required info missing.");
+        if (!amFn) return notify("First name required.", "error");
+        
+        if (amRole === 'admin') {
+            if (!amId) return notify("Administrative ID required.", "error");
+            if (amPin.trim().length < 8) return notify("Admin passphrase must be at least 8 characters.", "error"); 
+            if (!amEmail) return notify("Admin email required for 2FA.", "error");
+        } else if (amRole !== 'madrasa') {
+            if (amPin.trim().length !== 6) return notify("Security PIN must be exactly 6 digits.", "error");
+        }
+
         const finalId = amRole === 'admin' ? amId : amFn;
-        if (amRole === 'admin' && !amId) return alert("Administrative ID required.");
         
         try {
             const hashed = await hashPin(amPin.trim());
@@ -129,11 +139,12 @@ export default function Admin() {
                 pin: hashed, 
                 role: amRole, 
                 status: 'approved', 
+                email: amEmail,
                 createdAt: serverTimestamp() 
             });
             setShowAddAdmin(false);
             notify("Account created.");
-            setAmFn(''); setAmLn(''); setAmId(''); setAmRole('security'); setAmPin('');
+            setAmFn(''); setAmLn(''); setAmId(''); setAmRole('security'); setAmPin(''); setAmEmail('');
         } catch(err) {
             notify("Error creating account.", "error");
         }
@@ -141,7 +152,7 @@ export default function Admin() {
 
     const handleSaveNotice = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!noticeTitle || !noticeContent) return alert("Title and content are required.");
+        if (!noticeTitle || !noticeContent) return notify("Title and content are required.", "error");
         
         try {
             if (editingNoticeId) {
@@ -284,7 +295,7 @@ export default function Admin() {
                 
                 {/* Redesigned Navigation: Filter + Grid */}
                 <div className="px-4 py-4 bg-white dark:bg-stone-900 border-b border-gray-100 dark:border-stone-800 shadow-sm transition-colors sticky top-[69px] z-10">
-                    <div className="flex items-center gap-3 mb-4 overflow-hidden">
+                    <div className="flex items-center gap-3 overflow-hidden">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-stone-500">Period:</span>
                         <div className="flex gap-1 overflow-x-auto no-scrollbar">
                             {['today', 'week', 'month', 'all'].map(f => (
@@ -301,35 +312,10 @@ export default function Admin() {
                             ))}
                         </div>
                     </div>
-                    
-                    <div className="grid grid-cols-4 gap-2">
-                        {[
-                            { id: 'analytics', label: 'Stats' },
-                            { id: 'directory', label: 'Users' },
-                            { id: 'ledger', label: 'Ledger' },
-                            { id: 'notices', label: 'News' },
-                            { id: 'tickets', label: 'Fix-It' },
-                            { id: 'polls', label: 'Polls' },
-                            { id: 'dues', label: 'Dues' }
-                        ].map(tab => (
-                            <button 
-                                key={tab.id}
-                                onClick={() => setAdmTab(tab.id as any)}
-                                className={clsx(
-                                    "px-2 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-tighter text-center transition-all border",
-                                    admTab === tab.id 
-                                        ? "bg-emerald-900 dark:bg-emerald-600 text-white border-emerald-900 dark:border-emerald-500 shadow-md scale-[1.02]" 
-                                        : "bg-white dark:bg-stone-800 text-gray-600 dark:text-gray-400 border-gray-100 dark:border-stone-700 hover:bg-gray-50 dark:hover:bg-stone-700"
-                                )}
-                            >
-                                {tab.label}
-                            </button>
-                        ))}
-                    </div>
                 </div>
             </header>
             
-            <div className="space-y-6 px-4">
+            <div className="space-y-6 px-4 pb-28">
                 {admTab === 'dues' && (
                     <div className="space-y-4 animate-fade-in">
                         <div className="flex justify-between items-center px-1 mb-2">
@@ -785,8 +771,20 @@ export default function Admin() {
                                 <option value="admin">Estate Administrator</option>
                                 <option value="madrasa_admin">Madrasa Official</option>
                             </select>
+                            {amRole === 'admin' && (
+                                <input type="email" placeholder="Administrator Email (Required for 2FA)" value={amEmail} onChange={e=>setAmEmail(e.target.value)} className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none placeholder-gray-400 font-medium"/>
+                            )}
                             <div className="relative">
-                                <input type={showAmPin ? "text" : "password"} maxLength={6} inputMode="numeric" pattern="[0-9]*" placeholder="Assign 6-Digit PIN" value={amPin} onChange={e=>setAmPin(e.target.value)} className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none font-mono text-center tracking-widest text-lg"/>
+                                <input 
+                                    type={showAmPin ? "text" : "password"} 
+                                    maxLength={amRole === 'admin' ? 64 : 6} 
+                                    inputMode={amRole === 'admin' ? "text" : "numeric"} 
+                                    pattern={amRole === 'admin' ? undefined : "[0-9]*"} 
+                                    placeholder={amRole === 'admin' ? "Assign Passphrase (min 8 chars)" : "Assign 6-Digit PIN"} 
+                                    value={amPin} 
+                                    onChange={e=>setAmPin(e.target.value)} 
+                                    className={`w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none text-center ${amRole === 'admin' ? 'font-sans text-base' : 'font-mono tracking-widest text-lg'}`}
+                                />
                                 <button onClick={()=>setShowAmPin(!showAmPin)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-emerald-700 p-2 transition-colors">{showAmPin ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}</button>
                             </div>
                         </div>
@@ -900,6 +898,60 @@ export default function Admin() {
 
                         <div className="flex pt-6 mt-6 border-t border-gray-100 justify-end">
                             <button onClick={()=>setViewStaff(null)} className="font-semibold text-gray-600 bg-gray-50 uppercase text-[11px] hover:bg-gray-100 transition-colors px-6 py-2.5 rounded-xl border border-gray-200">Close</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* iOS Style Bottom Navigation */}
+            <div className="fixed sm:absolute bottom-0 left-0 w-full bg-white/90 dark:bg-stone-900/90 backdrop-blur-md border-t border-gray-100 dark:border-stone-800 flex items-center justify-around pb-6 pt-3 px-2 z-40 transition-colors">
+                <button onClick={() => setAdmTab('analytics')} className={`flex flex-col items-center gap-1 p-2 ${admTab === 'analytics' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-stone-500'}`}>
+                    <Activity className="w-6 h-6" />
+                    <span className="text-[10px] h-[12px] font-bold">Stats</span>
+                </button>
+                <button onClick={() => setAdmTab('directory')} className={`flex flex-col items-center gap-1 p-2 ${admTab === 'directory' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-stone-500'}`}>
+                    <Users className="w-6 h-6" />
+                    <span className="text-[10px] h-[12px] font-bold">Users</span>
+                </button>
+                <div className="-mt-8">
+                    <button onClick={() => setShowAddAdmin(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white p-4 rounded-full shadow-lg shadow-emerald-500/30 transform transition-transform active:scale-95 border-4 border-stone-100 dark:border-stone-950">
+                        <PlusCircle className="w-6 h-6" />
+                    </button>
+                </div>
+                <button onClick={() => setAdmTab('notices')} className={`flex flex-col items-center gap-1 p-2 ${admTab === 'notices' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-stone-500'}`}>
+                    <Bell className="w-6 h-6" />
+                    <span className="text-[10px] h-[12px] font-bold">News</span>
+                </button>
+                <button onClick={() => setMenuOpen(true)} className={`flex flex-col items-center gap-1 p-2 text-gray-400 dark:text-stone-500 hover:text-gray-600 dark:hover:text-stone-400`}>
+                    <Menu className="w-6 h-6" />
+                    <span className="text-[10px] h-[12px] font-bold">Menu</span>
+                </button>
+            </div>
+
+            {/* Sliding Side Menu */}
+            {menuOpen && (
+                <div className="fixed inset-0 z-[300] flex">
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={() => setMenuOpen(false)}></div>
+                    <div className="relative w-64 bg-white dark:bg-stone-900 border-r border-gray-100 dark:border-stone-800 h-full flex flex-col shadow-2xl transition-transform duration-300 animate-slide-in-left">
+                        <div className="p-5 border-b border-gray-100 dark:border-stone-800 flex justify-between items-center bg-gray-50/50 dark:bg-stone-800/50">
+                            <span className="font-bold text-gray-900 dark:text-gray-100">Admin Menu</span>
+                            <button onClick={() => setMenuOpen(false)} className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-stone-300 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
+                            <button onClick={() => { setAdmTab('ledger'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${admTab === 'ledger' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
+                                <BookOpen className="w-5 h-5" /> <span className="font-semibold text-sm">Ledger</span>
+                            </button>
+                            <button onClick={() => { setAdmTab('dues'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${admTab === 'dues' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
+                                <CircleDollarSign className="w-5 h-5" /> <span className="font-semibold text-sm">Estate Dues</span>
+                            </button>
+                            <button onClick={() => { setAdmTab('tickets'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${admTab === 'tickets' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
+                                <Wrench className="w-5 h-5" /> <span className="font-semibold text-sm">Tickets & Fix-It</span>
+                            </button>
+                            <button onClick={() => { setAdmTab('polls'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${admTab === 'polls' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
+                                <MessageSquare className="w-5 h-5" /> <span className="font-semibold text-sm">Townhall</span>
+                            </button>
                         </div>
                     </div>
                 </div>

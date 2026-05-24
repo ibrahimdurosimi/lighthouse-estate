@@ -38,17 +38,6 @@ export default function Landing() {
                 </div>
                 <h1 className="text-4xl font-semibold text-brand-black leading-tight tracking-tight mb-2">Lighthouse</h1>
                 <p className="text-sm font-medium text-emerald-700 tracking-wider uppercase">Estate Portal</p>
-                
-                <button onClick={async () => {
-                    import('firebase/firestore').then(async ({ getDocs, collection }) => {
-                        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'users'));
-                        const data = snap.docs.map(d => {
-                            const u = d.data();
-                            return `${u.role}: ${u.identifier}`;
-                        }).join('\n');
-                        alert("Users:\n" + data);
-                    });
-                }} className="absolute top-0 right-0 w-8 h-8 opacity-0">D</button>
             </div>
 
             <div className="grid grid-cols-1 gap-4 w-full max-w-sm mb-10">

@@ -6,8 +6,9 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export async function hashPin(pin: string) {
+    const SALT = "ESTATE_MAGIC_PROD_SALT_8X9A2";
     const encoder = new TextEncoder();
-    const data = encoder.encode(pin);
+    const data = encoder.encode(pin + SALT);
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 }

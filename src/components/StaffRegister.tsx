@@ -7,7 +7,7 @@ import { AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 
 export default function StaffRegister() {
-    const { setView, viewParams } = useApp();
+    const { setView, viewParams, notify } = useApp();
     const [inviteCode, setInviteCode] = useState(viewParams.inviteCode || '');
     const [staffDocId, setStaffDocId] = useState<string | null>(null);
     const [staffData, setStaffData] = useState<any>(null);
@@ -63,14 +63,14 @@ export default function StaffRegister() {
             const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'users'), where('appId', '==', appId), where('inviteCode', '==', code), where('role', '==', 'staff'));
             const snap = await getDocs(q);
             if (snap.empty) {
-                alert('Invalid Invite Code');
+                notify('Invalid Invite Code', 'error');
                 setLoading(false);
                 return;
             }
             const docData = snap.docs[0];
             const data = docData.data();
             if (data.status !== 'pending_employee_completion') {
-                alert('This invite code has already been used.');
+                notify('This invite code has already been used.', 'error');
                 setLoading(false);
                 return;
             }
@@ -78,7 +78,7 @@ export default function StaffRegister() {
             setStaffData(data);
         } catch (error) {
             console.error(error);
-            alert('Verification failed. Try again.');
+            notify('Verification failed. Try again.', 'error');
         }
         setLoading(false);
     }
@@ -90,11 +90,11 @@ export default function StaffRegister() {
 
     const handleCompleteProfile = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (pin.trim() !== confirmPin.trim()) return alert('PINs do not match');
-        if (pin.trim().length !== 6) return alert('PIN must be 6 digits');
-        if (nin.length !== 11) return alert('NIN must be 11 digits');
-        if (bvn.length !== 11) return alert('BVN must be 11 digits');
-        if (!passportPhoto || !idDocument || !nokIdDocument) return alert('Please upload all required photos & documents.');
+        if (pin.trim() !== confirmPin.trim()) return notify('PINs do not match', 'error');
+        if (pin.trim().length !== 6) return notify('PIN must be 6 digits', 'error');
+        if (nin.length !== 11) return notify('NIN must be 11 digits', 'error');
+        if (bvn.length !== 11) return notify('BVN must be 11 digits', 'error');
+        if (!passportPhoto || !idDocument || !nokIdDocument) return notify('Please upload all required photos & documents.', 'error');
         
         setLoading(true);
         try {
@@ -109,11 +109,11 @@ export default function StaffRegister() {
                 inviteCode: null, // Clear invite code so it can't be reused
                 updatedAt: new Date()
             });
-            alert('Profile completed! Pending approval from your employer.');
+            notify('Profile completed! Pending approval from your employer.');
             setView('landing');
         } catch (error) {
             console.error(error);
-            alert('Failed to complete profile.');
+            notify('Failed to complete profile.', 'error');
         }
         setLoading(false);
     };

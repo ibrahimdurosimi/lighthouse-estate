@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, LogOut, Clock, Truck, Calendar, MessageSquare, Copy, Trash2, Eye, EyeOff, AlertTriangle, Wrench, Bell, UserPlus, Info, Shield, BookOpen, Users, ScanLine, ArrowRight, Search, X } from 'lucide-react';
+import { Settings, LogOut, Clock, Truck, Calendar, MessageSquare, Copy, Trash2, Eye, EyeOff, AlertTriangle, Wrench, Bell, UserPlus, Info, Shield, BookOpen, Users, ScanLine, ArrowRight, Search, X, Menu, Home } from 'lucide-react';
 import { useApp } from '../lib/context';
 import ThemeToggle from './ThemeToggle';
 import { db, appId } from '../lib/firebase';
@@ -11,6 +11,7 @@ import clsx from 'clsx';
 export default function Resident() {
     const { profile, setProfile, setView, notify, isDarkMode } = useApp();
     const [viewTab, setViewTab] = useState<'dash' | 'auth' | 'hist' | 'bc' | 'staff' | 'dir' | 'svcs' | 'kids' | 'tickets' | 'polls'>('dash');
+    const [menuOpen, setMenuOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState<'home' | 'security' | 'services'>('home');
     const [dateFilter, setDateFilter] = useState('all');
     
@@ -226,7 +227,7 @@ Thank you for your understanding and cooperation`;
     const [lsName, setLsName] = useState('');
     const [lsDate, setLsDate] = useState('');
     const handleLongStay = async () => {
-        if (!lsName || !lsDate) return alert("Missing info.");
+        if (!lsName || !lsDate) return notify("Missing info.", "error");
         const code = generateCode();
         const expiry = new Date(lsDate);
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'codes'), {
@@ -247,7 +248,7 @@ Thank you for your understanding and cooperation`;
     const [gpName, setGpName] = useState('');
     const [gpNote, setGpNote] = useState('');
     const handleGatePass = async () => {
-        if (!gpName || !gpNote) return alert("Detail required.");
+        if (!gpName || !gpNote) return notify("Detail required.", "error");
         const code = generateCode();
         const exp = new Date(Date.now() + 180 * 60000);
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'codes'), {
@@ -265,7 +266,7 @@ Thank you for your understanding and cooperation`;
     };
 
     const handleAddStaff = async () => {
-        if (!staffFn || !staffRole || !staffPhone) return alert("Missing info.");
+        if (!staffFn || !staffRole || !staffPhone) return notify("Missing info.", "error");
         const inviteCode = generateCode();
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'users'), {
             appId,
@@ -1357,6 +1358,66 @@ Thank you.`;
                                 <button type="submit" className="flex-[2] bg-emerald-900 text-white rounded-xl py-3 font-semibold text-xs shadow-sm uppercase hover:bg-emerald-950 transition-colors">Submit Ticket</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* iOS Style Bottom Navigation */}
+            <div className="fixed sm:absolute bottom-0 left-0 w-full bg-white/90 dark:bg-stone-900/90 backdrop-blur-md border-t border-gray-100 dark:border-stone-800 flex items-center justify-around pb-6 pt-3 px-2 z-40 transition-colors">
+                <button onClick={() => setViewTab('dash')} className={`flex flex-col items-center gap-1 p-2 ${viewTab === 'dash' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-stone-500'}`}>
+                    <Home className="w-6 h-6" />
+                    <span className="text-[10px] h-[12px] font-bold">Home</span>
+                </button>
+                <button onClick={() => setViewTab('auth')} className={`flex flex-col items-center gap-1 p-2 ${viewTab === 'auth' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-stone-500'}`}>
+                    <UserPlus className="w-6 h-6" />
+                    <span className="text-[10px] h-[12px] font-bold">Pass</span>
+                </button>
+                <div className="-mt-8">
+                    <button onClick={handleTriggerSOS} className="bg-red-500 hover:bg-red-600 text-white p-4 rounded-full shadow-lg shadow-red-500/30 transform transition-transform active:scale-95 border-4 border-stone-100 dark:border-stone-950">
+                        <Shield className="w-6 h-6" />
+                    </button>
+                </div>
+                <button onClick={() => setViewTab('bc')} className={`flex flex-col items-center gap-1 p-2 ${viewTab === 'bc' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-stone-500'}`}>
+                    <Bell className="w-6 h-6" />
+                    <span className="text-[10px] h-[12px] font-bold">Notices</span>
+                </button>
+                <button onClick={() => setMenuOpen(true)} className={`flex flex-col items-center gap-1 p-2 text-gray-400 dark:text-stone-500 hover:text-gray-600 dark:hover:text-stone-400`}>
+                    <Menu className="w-6 h-6" />
+                    <span className="text-[10px] h-[12px] font-bold">Menu</span>
+                </button>
+            </div>
+
+            {/* Sliding Side Menu */}
+            {menuOpen && (
+                <div className="fixed inset-0 z-[300] flex">
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={() => setMenuOpen(false)}></div>
+                    <div className="relative w-64 bg-white dark:bg-stone-900 border-r border-gray-100 dark:border-stone-800 h-full flex flex-col shadow-2xl transition-transform duration-300 animate-slide-in-left">
+                        <div className="p-5 border-b border-gray-100 dark:border-stone-800 flex justify-between items-center bg-gray-50/50 dark:bg-stone-800/50">
+                            <span className="font-bold text-gray-900 dark:text-gray-100">Menu</span>
+                            <button onClick={() => setMenuOpen(false)} className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-stone-300 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
+                            <button onClick={() => { setViewTab('tickets'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${viewTab === 'tickets' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
+                                <Wrench className="w-5 h-5" /> <span className="font-semibold text-sm">Tickets & Fix-It</span>
+                            </button>
+                            <button onClick={() => { setViewTab('kids'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${viewTab === 'kids' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
+                                <BookOpen className="w-5 h-5" /> <span className="font-semibold text-sm">Madrasa Portal</span>
+                            </button>
+                            <button onClick={() => { setViewTab('staff'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${viewTab === 'staff' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
+                                <Users className="w-5 h-5" /> <span className="font-semibold text-sm">My Staff</span>
+                            </button>
+                            <button onClick={() => { setViewTab('polls'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${viewTab === 'polls' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
+                                <MessageSquare className="w-5 h-5" /> <span className="font-semibold text-sm">Townhall</span>
+                            </button>
+                            <button onClick={() => { setViewTab('svcs'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${viewTab === 'svcs' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
+                                <ScanLine className="w-5 h-5" /> <span className="font-semibold text-sm">Marketplace</span>
+                            </button>
+                            <button onClick={() => { setViewTab('hist'); setMenuOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${viewTab === 'hist' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800'}`}>
+                                <Clock className="w-5 h-5" /> <span className="font-semibold text-sm">Activity Logs</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
